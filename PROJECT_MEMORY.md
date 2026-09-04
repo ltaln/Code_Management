@@ -1,5 +1,7 @@
 # 项目记忆 · 2026-09-04
 
+最新 0.3.0：服务代码 5bdad72915b6445bd337080b59d7af329209aef2 已上线。自建 Firecrawl 持久采集真实验收通过：78 页、0 失败、14/14 场、98 文件 Hash 通过；14 项服务测试通过，27 个冻结文件未改。用户没有备份，必须自行恢复原对话；Chrome 运行正常但缺少浏览器扩展和原生连接组件，需通过 Browser 插件安装流程修复后读取。不得重复要求用户上传备份。历史预测记录只能用于溯源，不能反推或补造模型参数。
+
 项目：HH520 Football AI System。目标仓库：ltaln/Code_Management。当前执行方式已由用户改为工作模式，旧材料中的“不使用 Codex”不再是本次要求。
 
 模型：HH520 V2.1-Test；Prompt：HH520-PROMPT-V2.1；Upgrade Package 1：PARKED。保持 GPT 负责分析、GitHub 保存资产、服务器提供数据、Task Manager 负责持续调度。不得因工程化改写模型。

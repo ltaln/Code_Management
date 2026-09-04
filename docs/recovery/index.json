@@ -1,0 +1,18 @@
+[
+  {
+    "repository": "ltaln/firecrawl-gpt-predictor",
+    "commit": "cb20b37e96b047007e21d6de436107d34287972e",
+    "path": "docs/predictions/2026-09-03_PREDICTION_COMMIT_V2.1_FRESH_20260903T143937Z.md",
+    "local_file": "2026-09-03_PREDICTION_COMMIT_V2.1_FRESH_20260903T143937Z.md",
+    "sha256": "a19a6a06b738ce56e4861e189fc1cd6bd3bffa8c1fd2c921e9d5c3ec233a80ca",
+    "classification": "LEGACY_REFERENCE_NOT_VALIDATED_BASELINE"
+  },
+  {
+    "repository": "ltaln/firecrawl-gpt-predictor",
+    "commit": "cb20b37e96b047007e21d6de436107d34287972e",
+    "path": "predictions/2026-09-04/hh520-v2.1-test-snapshot-20260904T075024Z.json",
+    "local_file": "hh520-v2.1-test-snapshot-20260904T075024Z.json",
+    "sha256": "ac51f8f69f9d0ca8df11d6bcc86352a7626a8fb601b3c6889c3b57e6cde0476a",
+    "classification": "LEGACY_REFERENCE_NOT_VALIDATED_BASELINE"
+  }
+]

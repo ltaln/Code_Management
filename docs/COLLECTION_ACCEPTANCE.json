@@ -1,0 +1,21 @@
+{
+  "task_id": "596a658fff42451faff3a96b4dcd5bf0",
+  "command": "采集 2026-09-04 所有比赛",
+  "status": "COMPLETED",
+  "snapshot_id": "20260904T154140Z",
+  "collected_at": "2026-09-04T15:53:43.537211+00:00",
+  "code_commit": "5bdad72915b6445bd337080b59d7af329209aef2",
+  "scraped_pages": 78,
+  "failed_pages": 0,
+  "match_count": 14,
+  "complete_matches": 14,
+  "truncated": false,
+  "unassigned_count": 0,
+  "files_verified": 98,
+  "hashes_valid": true,
+  "receipt_sha256": "cef02593bcace61698744e9e83685bf56e0d0f0db3f36ba621697f69164a892f",
+  "authenticated_https_report_verified": true,
+  "is_prediction": false,
+  "historical_cutoff_verified": false,
+  "mobile_chat_delivery_verified": false
+}

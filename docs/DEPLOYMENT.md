@@ -2,12 +2,12 @@
 
 任务入口：https://hh520.156.225.23.17.sslip.io
 
-运行代码提交：03dd2f99370d3fc7db7209de0d6f20354e4f344a。镜像 ID：sha256:b1a12cd5ef94fa2d46f8cc9d9011f4c509dcef6250a41ccdc5f3277c5d166880。
+当前运行代码：5bdad72915b6445bd337080b59d7af329209aef2，镜像标签 hh520-gateway:0.3.0。旧版运行提交为 03dd2f99370d3fc7db7209de0d6f20354e4f344a。
 
 ## 实际部署
 
 - 项目位于 /opt/hh520；独立 Docker Compose 项目名 hh520。
-- hh520-gateway-1 提供 API；hh520-worker-1 执行持久任务的启动检查。
+- hh520-gateway-1 提供 API；hh520-worker-1 执行持久任务的启动检查和 Firecrawl 采集。
 - 共享卷 hh520_hh520_state 保存 SQLite。两容器均设置 unless-stopped 和 192 MiB 内存限制。
 - gateway 加入现有 firecrawl_backend 网络，独立别名 hh520-gateway。宿主端口仅绑定 127.0.0.1:8765。
 - 现有 Caddy 新增上述 HTTPS 主机并代理到 hh520-gateway:8765；原 Firecrawl 站点块逐字保留。
@@ -41,6 +41,10 @@ docker compose -p hh520 --env-file /etc/hh520/gateway.env -f /opt/hh520/deploy/c
 
 ## 未完成
 
-ChatGPT 账户中的 Actions 配置尚未创建；内置浏览器打开/读取 GPT 编辑器连续超时。当前服务只支持任务查询，不能主动回写 ChatGPT 原会话。真实采集与 GPT 分析执行器仍未接通，原模型资料差异仍待核对。没有将连接检查或服务器上线计为预测完成。
+ChatGPT 账户中的 Actions 配置尚未创建；内置浏览器未能访问已登录会话；Chrome 官方诊断显示扩展与原生连接组件未安装。当前服务提供任务查询，不能主动回写 ChatGPT 原会话。真实采集接口已接通；GPT 分析执行器、历史输入审计和原模型资料差异仍待完成。没有将连接检查或服务器上线计为预测完成。
 
-域名延续现有服务器所用 sslip.io 公共 DNS 方式，未购买新域名或托管服务。本轮没有付费采集或推理调用。
+域名延续现有服务器所用 sslip.io 公共 DNS 方式，未购买新域名或托管服务。0.3.0 验收使用自建 Firecrawl，未调用 OpenAI。
+
+0.3.0 整日采集验收任务：596a658fff42451faff3a96b4dcd5bf0，命令为 `采集 2026-09-04 所有比赛`。调用入口与凭据仅保存在服务器私有配置，不输出到报告。
+
+实测 COMPLETED：78 页成功、0 页失败，14/14 场资料完整且身份通过；无截断、无未归属页面。快照 20260904T154140Z；98 个归档文件逐一 Hash 校验通过，公网认证报告读取通过。详细非敏感回执见 [COLLECTION_ACCEPTANCE.json](COLLECTION_ACCEPTANCE.json)。这次未执行预测，没有将当前抓取的赛后资料当作历史赛前输入。

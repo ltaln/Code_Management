@@ -1,42 +1,34 @@
 {
-  "status": "REFERENCE_ONLY_ORDER_RECONCILIATION_REQUIRED",
-  "source_ids": [
-    "S05",
-    "S06"
-  ],
+  "status": "FROZEN_OPERATIONAL_ORDER",
+  "source_ids": ["S03", "S04", "S07"],
+  "order_evidence": "The user explicitly approved the operational framework update in the original ChatGPT conversation; verified in the logged-in browser on 2026-09-05.",
   "main_chain": [
     "important_notices",
+    "model_health_check",
     "prompt_loading",
+    "fresh_data_collection",
+    "data_package_id",
+    "data_hash_check",
     "data_consistency_audit",
+    "data_confidence_score",
     "water_market",
-    "correct_score",
-    "soccerstats_htft",
     "team_analysis",
     "league_analysis",
-    "company_analysis",
-    "cross_model_interaction",
-    "calibration",
-    "prediction_commit",
-    "final_report"
-  ],
-  "preserved_operational_modules": [
-    "model_health_check",
-    "data_hash_check",
-    "data_confidence_score",
+    "company_source_analysis",
+    "correct_score",
+    "soccerstats_htft",
     "odds_abnormal_detection",
     "match_risk_engine",
     "conflict_detection",
-    "execution_log"
+    "cross_model_interaction",
+    "calibration",
+    "prediction_commit",
+    "execution_log",
+    "final_report"
   ],
-  "post_match": [
-    "evaluation"
-  ],
-  "output_order": [
-    "correct_score",
-    "htft",
-    "other_markets"
-  ],
-  "preserved_baseline_modules": [
+  "post_match": ["evaluation"],
+  "output_order": ["correct_score", "htft", "other_markets"],
+  "baseline_rules": [
     "firecrawl_gate",
     "missing_data_recovery",
     "t_minus_30_freeze",
@@ -58,5 +50,6 @@
     "htft",
     "first_half",
     "total_goals"
-  ]
+  ],
+  "backtest_data_policy": "PREDICTION_ARCHIVE_FIRST"
 }

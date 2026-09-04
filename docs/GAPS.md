@@ -1,12 +1,11 @@
-# 待补齐项
+# 尚未完成的真实缺口
 
-|阻塞代码|已取得的材料|还缺什么|解锁证据|
-|---|---|---|---|
-|FLOW_ORDER_CONFLICT|S01–S06 完整原文|确认哪个是冻结执行顺序，增强模块的准确位置|原版本执行文件或可核验的最终顺序依据|
-|NUMERIC_RULES_UNSPECIFIED|模块输入输出、DCS 权重分档、Calibration 示例|分项评分、融合规则、权重、Calibration 的完整既有定义；若由 GPT 定性执行，需要原定性准则与基线|原始模型资料与历史同输入对照记录|
-|BACKTEST_PROMPT_MISSING|实时预测 Prompt 和回测操作规则|既有完整 Backtest Mode Prompt|可追溯原文及版本 Hash|
-|RUNTIME_NOT_CONNECTED|工程架构、任务/数据/归档契约|持久任务执行器、数据服务地址和凭据、GPT 执行接口、结果归档存储、手机联调|实际服务调用与端到端验收报告|
+|缺口|当前状态|完成证据|
+|---|---|---|
+|CHATGPT_ACTION_CONNECTED|服务器已具备 GPT 数据读取、逐场保存和最终归档接口；账户尚未完成 Actions 配置|手机“检查连接”成功，并能在测试任务中调用新接口|
+|LIVE_PREDICTION_ACCEPTANCE|采集已验收；GPT 端到端预测尚未运行|选择未来仍可满足 T-30 的小日期/单日任务，完整报告与 Prediction Commit 均可读取|
+|HISTORICAL_T30_RECONSTRUCTION|过去日期仍安全阻塞；没有把当前赛后网页当历史输入|可证明每字段 as-of 不晚于 T-30，或已有有效 Prediction Commit|
+|BACKTEST_EVALUATION_RUNTIME|Prediction Archive First 规则和契约已保存，运行实现待接入赛果源|有档案零重预测、结果比较、评价记录不可变保存|
+|GITHUB_PREDICTION_MIRROR|运行时 Commit 当前保存在服务器持久卷|远端 Git commit 回执 Hash 与服务器内容一致|
 
-这些缺口不妨碍本次文档与资产交付，但阻止宣称自动预测系统完成。凭据通过部署环境提供，不写入公开仓库。本次不生成模拟预测作为运行证据。
-
-新增 BASELINE_REVISION_CONFLICT：S07 已保存冻结快照的 Master/Prediction/Backtest v1.1、HT/FT DNA v1.0 与后期 HH520-PROMPT-V2.1 尚缺明确映射。需核对既有完整 Prompt 及源版本差异；当前只保存原文，不自行合并为新的活动模型。
+模型来源顺序、DCS 数值、Prompt 版本和 GPT 定性执行定位已经从原始登录会话核验，不再列为缺口。Upgrade Package 1 保持 PARKED。

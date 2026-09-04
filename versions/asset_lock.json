@@ -1,8 +1,8 @@
 {
   "lock_format": 1,
   "model": "HH520 V2.1-Test",
-  "release": "0.1.0",
-  "meaning": "Integrity of recovered bytes; not runtime readiness or numerical completeness",
+  "release": "0.2.0",
+  "meaning": "Integrity of recovered bytes and reconciled frozen operational order; runtime readiness is verified separately",
   "protected_roots": [
     "models",
     "prompts",
@@ -12,10 +12,20 @@
     "docs/sources"
   ],
   "files": {
-    "models/HH520_V2.1-Test/manifest.json": "bdaae4af16bab83275608afb489f9bf0e5110b8372a6c53b9aaf6f313926b7c0",
+    "calibration/README.md": "04ae011bc7c5e4e59fdf3c501988f0ce0a3ff10276d07b6b3b031db6c04b0402",
+    "docs/sources/architecture_v2_original.md": "6d279b138e3ab79b13daeb5e3323d912561e86eae5324d1240c2a8e9ea8405cd",
+    "docs/sources/backtest_amendment_original.md": "8aa992164c8cabd744ffbd1879d20fb48c813ac3c020606c2b27b8c965619ace",
+    "docs/sources/chapter13_original.md": "b65dd2a30e03fa4278d7c2fc46ea1e5fdd3663d80e286c7a1c0c2f55e14f75db",
+    "docs/sources/frozen_snapshot_20260902.md": "b978787101b61d9596fb08557662d7553d54ee7ae5bce2740ec7d791f3a98733",
+    "docs/sources/implementation_v2_docx_text.txt": "d9549ff9f5fa28c582136c6fb8793ebb53ff0143244a00715bb36bb431da3418",
+    "docs/sources/index.json": "c0d79d0b919b060d106806baa3a423450ffdb4b56f4748bd554650a5d8110e35",
+    "docs/sources/model_sop_original.md": "704f454c3bc6069f36c40618702a531de7f40d563895d4b8d2ec5bacecee5077",
+    "docs/sources/operational_update_original.md": "41c62805775c6432dfec9f70f3df648540f17e2763343d00fcebc65ac0d0fcc2",
+    "docs/sources/README.md": "4edfe429cc7836a3d752c1c9fd733c12fbf1a1b084400ef45eb888551735a86d",
+    "models/HH520_V2.1-Test/manifest.json": "8a7970163588249dd0656344f38d4e58b42bfd53cf5c1cb5f64303171bdd3948",
     "models/HH520_V2.1-Test/冻结基线补充.md": "d7b808092ad9e0eb3a8234a6ed0c44f659f04ed9d3043bc253386ee501633503",
     "models/HH520_V2.1-Test/分析模块.md": "86aaad5856f869b64e534451b2bd3ea0882958d7f1eb9eb4d7aa03987855fbf4",
-    "models/HH520_V2.1-Test/执行流程.md": "3df8750409286125d967e91c5be2ef61a8e7b071babdf87bab86ece97a28677a",
+    "models/HH520_V2.1-Test/执行流程.md": "5a8fb052fffe36bd8ec600fa84bc48a933fa2fdeeb47002acc6ed60ba09c958d",
     "models/HH520_V2.1-Test/提示词.md": "ed839b52c7694aeb03ce52b3123b36aae89d6125e56352c71a4fc1767beec12b",
     "models/HH520_V2.1-Test/数据要求.md": "a3a24d38cd88fb162e054950a98b3dcb3f27b8258e56b0ca166065e975c3f8e5",
     "models/HH520_V2.1-Test/校准规则.md": "d9c644d701123a9d3d56a141608c9d0419c871034d886a847a7e617a9eef1536",
@@ -28,16 +38,6 @@
     "prompts/HH520-PROMPT-V2.1.txt": "6208d6c44a4fa75a2f8b71ad68eabca2f9d4f259e0b73339e5f0dd78b6f14925",
     "prompts/README.md": "a056fb2c0b53f9a31cb1cad696531d97233a18fb7301729a1f97b4c640da66f7",
     "rules/README.md": "3f944a34359c08c4c0e1335fb506379472769302bc08a760cdfe82165e120819",
-    "calibration/README.md": "04ae011bc7c5e4e59fdf3c501988f0ce0a3ff10276d07b6b3b031db6c04b0402",
-    "workflows/prediction.json": "8e2ecaf525480e17cbfb2dec7e0d70f80f537a8000b0d9233aedcd5fec637f12",
-    "docs/sources/architecture_v2_original.md": "6d279b138e3ab79b13daeb5e3323d912561e86eae5324d1240c2a8e9ea8405cd",
-    "docs/sources/backtest_amendment_original.md": "8aa992164c8cabd744ffbd1879d20fb48c813ac3c020606c2b27b8c965619ace",
-    "docs/sources/chapter13_original.md": "b65dd2a30e03fa4278d7c2fc46ea1e5fdd3663d80e286c7a1c0c2f55e14f75db",
-    "docs/sources/frozen_snapshot_20260902.md": "b978787101b61d9596fb08557662d7553d54ee7ae5bce2740ec7d791f3a98733",
-    "docs/sources/implementation_v2_docx_text.txt": "d9549ff9f5fa28c582136c6fb8793ebb53ff0143244a00715bb36bb431da3418",
-    "docs/sources/index.json": "c0d79d0b919b060d106806baa3a423450ffdb4b56f4748bd554650a5d8110e35",
-    "docs/sources/model_sop_original.md": "704f454c3bc6069f36c40618702a531de7f40d563895d4b8d2ec5bacecee5077",
-    "docs/sources/operational_update_original.md": "41c62805775c6432dfec9f70f3df648540f17e2763343d00fcebc65ac0d0fcc2",
-    "docs/sources/README.md": "4edfe429cc7836a3d752c1c9fd733c12fbf1a1b084400ef45eb888551735a86d"
+    "workflows/prediction.json": "c932b140e36460560e54d7d354d553f945e467f9c8cf81a89901474b5caf1435"
   }
 }

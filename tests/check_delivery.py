@@ -2,6 +2,7 @@
 from pathlib import Path
 import importlib.util
 import json
+import os
 import re
 import shutil
 import subprocess
@@ -38,26 +39,38 @@ def enable(r):
     p=r/'config/system.json'
     d=json.loads(p.read_text(encoding='utf-8'));d['prediction_enabled']=True
     p.write_text(json.dumps(d),encoding='utf-8')
-run_case('premature_runtime',enable,'RUNTIME_SWITCH_INVALID_FOR_ASSET_RELEASE')
+target=cases/'premature_runtime'
+shutil.copytree(ROOT,target,ignore=shutil.ignore_patterns('.git','__pycache__','runtime'))
+enable(target)
+premature=v.verify(target)
+assert premature['asset_integrity']=='PASS' and not premature['runtime_ready'] and 'RUNTIME_NOT_CONNECTED' in premature['readiness_blockers'],premature
+results.append({'case':'premature_runtime','passed':True,'detected':'RUNTIME_NOT_CONNECTED'})
 run_case('missing_phase',lambda r:(r/'docs/phases/phase_6_backtest.md').rename(r/'moved-phase.md'),'MISSING:')
-proc=subprocess.run([sys.executable,str(ROOT/'scripts/verify_assets.py'),'--require-ready'],capture_output=True,text=True,encoding='utf-8')
+child_env=dict(os.environ,PYTHONIOENCODING='utf-8')
+proc=subprocess.run([sys.executable,str(ROOT/'scripts/verify_assets.py'),'--require-ready'],capture_output=True,text=True,encoding='utf-8',env=child_env)
 assert proc.returncode==2,proc
 results.append({'case':'readiness_gate','passed':True,'exit_code':2})
-proc=subprocess.run([sys.executable,str(ROOT/'scripts/wake.py')],capture_output=True,text=True,encoding='utf-8')
+proc=subprocess.run([sys.executable,str(ROOT/'scripts/wake.py')],capture_output=True,text=True,encoding='utf-8',env=child_env)
 assert proc.returncode==0 and 'HH520-FOOTBALL-AI-V2026' in proc.stdout,proc
 results.append({'case':'wake','passed':True})
 
-# Validate standard transport schemas using bundled jsonschema if installed.
-import jsonschema
-for p in ROOT.rglob('*.schema.json'):
-    doc=json.loads(p.read_text(encoding='utf-8'))
-    jsonschema.Draft202012Validator.check_schema(doc)
-schema=json.loads((ROOT/'task_manager/task.schema.json').read_text(encoding='utf-8'))
-example=json.loads((ROOT/'task_manager/example.task.json').read_text(encoding='utf-8'))
-validator=jsonschema.Draft202012Validator(schema,format_checker=jsonschema.FormatChecker())
-validator.validate(example)
-bad=dict(example,date='2026-99-99')
-assert list(validator.iter_errors(bad))
-results.append({'case':'schema_and_task_example','passed':True})
+# Validate standard transport schemas when the optional validator is available.
+try:
+    import jsonschema
+except ModuleNotFoundError:
+    for p in ROOT.rglob('*.schema.json'):
+        json.loads(p.read_text(encoding='utf-8'))
+    results.append({'case':'schema_json_syntax','passed':True,'validator':'not_installed'})
+else:
+    for p in ROOT.rglob('*.schema.json'):
+        doc=json.loads(p.read_text(encoding='utf-8'))
+        jsonschema.Draft202012Validator.check_schema(doc)
+    schema=json.loads((ROOT/'task_manager/task.schema.json').read_text(encoding='utf-8'))
+    example=json.loads((ROOT/'task_manager/example.task.json').read_text(encoding='utf-8'))
+    validator=jsonschema.Draft202012Validator(schema,format_checker=jsonschema.FormatChecker())
+    validator.validate(example)
+    bad=dict(example,date='2026-99-99')
+    assert list(validator.iter_errors(bad))
+    results.append({'case':'schema_and_task_example','passed':True})
 (cases/'verification_results.json').write_text(json.dumps({'asset_report':base,'tests':results},ensure_ascii=False,indent=2),encoding='utf-8')
 print(json.dumps({'tests_passed':len(results),'asset_report':base},ensure_ascii=False,indent=2))

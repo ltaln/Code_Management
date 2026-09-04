@@ -112,10 +112,12 @@ def verify(root: Path = ROOT) -> dict:
     if not isinstance(blockers, list):
         errors.append('INVALID_BLOCKER_LIST')
         blockers = ['INVALID_MANIFEST']
-    # This release contains no executor. A config toggle cannot turn it into one.
-    ready_reasons = sorted(set(blockers + ['RUNTIME_NOT_IMPLEMENTED_IN_ASSET_RELEASE']))
-    if manifest.get('runtime_enabled') is not False or config.get('prediction_enabled') is not False or config.get('backtest_enabled') is not False:
-        errors.append('RUNTIME_SWITCH_INVALID_FOR_ASSET_RELEASE')
+    external_runtime=(manifest.get('runtime_enabled') is True and config.get('prediction_enabled') is True
+                      and config.get('gpt_executor')=='chatgpt-actions-v1'
+                      and config.get('archive_store')=='server-immutable-v1')
+    ready_reasons=list(blockers)
+    if not external_runtime:
+        ready_reasons.append('RUNTIME_SWITCH_DISABLED')
 
     links_checked = 0
     for p in inventory:
@@ -130,10 +132,11 @@ def verify(root: Path = ROOT) -> dict:
             if not (p.parent / path).exists():
                 errors.append(f'BROKEN_LINK: {p.relative_to(root)} -> {target}')
             links_checked += 1
+    runtime_ready=not errors and external_runtime and not ready_reasons
     return {'asset_integrity': 'PASS' if not errors else 'FAIL', 'files': len(inventory),
             'locked_files': len(entries), 'sources': len(index), 'local_links_checked': links_checked,
             'model': MODEL, 'core_frozen': manifest.get('core_frozen') is True,
-            'runtime_ready': False, 'readiness_blockers': ready_reasons, 'errors': errors}
+            'runtime_ready': runtime_ready, 'readiness_blockers': sorted(set(ready_reasons)), 'errors': errors}
 
 
 def main() -> int:

@@ -1,9 +1,9 @@
-"""Persistent command gateway. Analysis stays blocked until frozen inputs are ready."""
+"""Persistent command gateway with an external ChatGPT analysis handoff."""
 from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager
-from datetime import date, datetime, timezone
+from datetime import date, datetime, timedelta, timezone
 import hashlib
 import hmac
 import json
@@ -20,6 +20,7 @@ from wsgiref.simple_server import make_server
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from verify_assets import verify, digest
+from data_engine.gpt_input import compact_match
 
 
 class RequestError(Exception):
@@ -55,11 +56,21 @@ class Store:
                     payload TEXT NOT NULL, status TEXT NOT NULL,
                     created REAL NOT NULL, updated REAL NOT NULL,
                     lease_until REAL, lease_token TEXT, attempts INTEGER NOT NULL DEFAULT 0,
-                    asset_hash TEXT NOT NULL, report TEXT, blockers TEXT NOT NULL DEFAULT '[]');
+                    asset_hash TEXT NOT NULL, report TEXT, blockers TEXT NOT NULL DEFAULT '[]',
+                    input_ref TEXT, prediction_commit TEXT);
                 CREATE TABLE IF NOT EXISTS events (
                     seq INTEGER PRIMARY KEY AUTOINCREMENT, task_id TEXT NOT NULL,
                     at REAL NOT NULL, status TEXT NOT NULL, detail TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS predictions (
+                    task_id TEXT NOT NULL, match_no INTEGER NOT NULL, code TEXT NOT NULL,
+                    payload TEXT NOT NULL, content_sha256 TEXT NOT NULL, created REAL NOT NULL,
+                    PRIMARY KEY(task_id, match_no));
             ''')
+            columns={row['name'] for row in db.execute('PRAGMA table_info(tasks)')}
+            if 'input_ref' not in columns:
+                db.execute('ALTER TABLE tasks ADD COLUMN input_ref TEXT')
+            if 'prediction_commit' not in columns:
+                db.execute('ALTER TABLE tasks ADD COLUMN prediction_commit TEXT')
 
     @contextmanager
     def db(self):
@@ -101,6 +112,8 @@ class Store:
             task = dict(row)
             task['payload'] = json.loads(task['payload'])
             task['blockers'] = json.loads(task['blockers'])
+            task['input_ref'] = json.loads(task['input_ref']) if task.get('input_ref') else None
+            task['prediction_commit'] = json.loads(task['prediction_commit']) if task.get('prediction_commit') else None
             task['events'] = [dict(x) for x in db.execute('SELECT at,status,detail FROM events WHERE task_id=? ORDER BY seq', (task_id,))]
             for key in ('lease_token', 'lease_until'):
                 task.pop(key)
@@ -142,13 +155,63 @@ class Store:
                 self.event(db,task_id,status,'报告已保存；是否为预测以报告类型为准')
             return bool(updated)
 
+    def handoff(self, task_id, token, input_ref, report):
+        with self.db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            now=time.time()
+            updated=db.execute("UPDATE tasks SET status='AWAITING_GPT',input_ref=?,report=?,blockers='[]',updated=?,lease_token=NULL,lease_until=NULL WHERE id=? AND lease_token=? AND status='COLLECTING' AND lease_until>=?",
+                (json.dumps(input_ref,ensure_ascii=False,sort_keys=True),report,now,task_id,token,now)).rowcount
+            if updated:
+                self.event(db,task_id,'AWAITING_GPT','采集与审计输入已保存，等待 GPT 按冻结流程逐场分析')
+            return bool(updated)
+
+    def save_match_prediction(self, task_id, match_no, code, payload):
+        encoded=json.dumps(payload,ensure_ascii=False,sort_keys=True,separators=(',',':'))
+        content_hash=hashlib.sha256(encoded.encode('utf-8')).hexdigest()
+        with self.db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            existing=db.execute('SELECT content_sha256 FROM predictions WHERE task_id=? AND match_no=?',(task_id,match_no)).fetchone()
+            if existing:
+                if existing['content_sha256'] != content_hash:
+                    raise RequestError(409,'MATCH_RESULT_ALREADY_COMMITTED')
+                return content_hash,False
+            task=db.execute('SELECT status FROM tasks WHERE id=?',(task_id,)).fetchone()
+            if not task:
+                raise RequestError(404,'TASK_NOT_FOUND')
+            if task['status']!='AWAITING_GPT':
+                raise RequestError(409,'TASK_NOT_AWAITING_GPT')
+            db.execute('INSERT INTO predictions(task_id,match_no,code,payload,content_sha256,created) VALUES(?,?,?,?,?,?)',
+                       (task_id,match_no,code,encoded,content_hash,time.time()))
+            self.event(db,task_id,'AWAITING_GPT',f'第 {match_no} 场分析已不可变保存')
+        return content_hash,True
+
+    def predictions(self, task_id):
+        with self.db() as db:
+            return [{**dict(row),'payload':json.loads(row['payload'])} for row in db.execute(
+                'SELECT match_no,code,payload,content_sha256,created FROM predictions WHERE task_id=? ORDER BY match_no',(task_id,))]
+
+    def complete_prediction(self, task_id, commit, report):
+        with self.db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            updated=db.execute("UPDATE tasks SET status='COMPLETED',prediction_commit=?,report=?,blockers='[]',updated=? WHERE id=? AND status='AWAITING_GPT'",
+                (json.dumps(commit,ensure_ascii=False,sort_keys=True),report,time.time(),task_id)).rowcount
+            if not updated:
+                row=db.execute('SELECT status,prediction_commit FROM tasks WHERE id=?',(task_id,)).fetchone()
+                if not row:
+                    raise RequestError(404,'TASK_NOT_FOUND')
+                if row['status']=='COMPLETED' and row['prediction_commit']:
+                    return json.loads(row['prediction_commit']),False
+                raise RequestError(409,'TASK_NOT_AWAITING_GPT')
+            self.event(db,task_id,'COMPLETED','全部逐场分析已提交，Prediction Commit 与报告已保存')
+        return commit,True
+
     def cancel(self, task_id):
         with self.db() as db:
             db.execute('BEGIN IMMEDIATE')
             row=db.execute('SELECT status FROM tasks WHERE id=?',(task_id,)).fetchone()
             if not row:
                 raise RequestError(404,'TASK_NOT_FOUND')
-            if row['status'] in ('CREATED','STARTUP_CHECK','COLLECTING'):
+            if row['status'] in ('CREATED','STARTUP_CHECK','COLLECTING','AWAITING_GPT'):
                 db.execute("UPDATE tasks SET status='CANCELLED',updated=?,lease_token=NULL,lease_until=NULL WHERE id=?",(time.time(),task_id))
                 self.event(db,task_id,'CANCELLED','用户取消；不会删除已保存记录')
 
@@ -170,7 +233,10 @@ class Worker:
             blockers = list(check['errors'])
             if digest(self.root/'versions/asset_lock.json') != row['asset_hash']:
                 blockers.append('ASSETS_CHANGED_SINCE_TASK_CREATED')
-            if payload['mode'] == 'collection' and not blockers:
+            today=datetime.now(timezone(timedelta(hours=8))).date().isoformat()
+            if payload['mode']=='prediction' and payload['date'] <= today:
+                blockers.append('PREDICTION_REQUIRES_FUTURE_FIXTURE_DATE_FOR_T_MINUS_30_SAFETY')
+            if payload['mode'] in ('collection','prediction') and not blockers:
                 from data_engine.collector import FirecrawlCollector, CollectionError, collection_report
                 collector=self.collector or FirecrawlCollector(self.store.path.parent/'collections')
                 if not self.store.renew(row['id'],token,'COLLECTING'):
@@ -178,8 +244,12 @@ class Worker:
                 try:
                     result=collector.collect(row['id'],payload['date'],
                         lambda: not self.stop.is_set() and self.store.renew(row['id'],token),token)
-                    status='COMPLETED' if result['collection_complete'] else 'PARTIAL'
                     report=collection_report(result)
+                    if payload['mode']=='prediction' and result['collection_complete'] and result['prediction_eligible']:
+                        if not self.store.handoff(row['id'],token,result,report):
+                            return True
+                        return True
+                    status='COMPLETED' if result['collection_complete'] else 'PARTIAL'
                     blockers=[] if result['collection_complete'] else ['COLLECTION_INCOMPLETE']
                 except CollectionError as exc:
                     status='FAILED'
@@ -189,7 +259,8 @@ class Worker:
                 status = 'COMPLETED'
                 report = '# 连接检查完成\n\n命令已接收、任务已持久保存、后台检查已执行、报告已保存。\n\n这不是比赛预测。真实预测仍受模型资料与服务接入缺口阻塞。'
             else:
-                blockers += check['readiness_blockers']
+                if payload['mode']!='prediction':
+                    blockers += check['readiness_blockers']
                 status = 'BLOCKED'
                 report = '# 任务未进入预测\n\n' + '\n'.join('- '+x for x in sorted(set(blockers)))
                 report += '\n\n已读取重要注意事项对应资产并校验冻结文件；未采集新数据，未调用模型，未生成比分。'
@@ -198,6 +269,8 @@ class Worker:
             self.store.finish(row['id'],token,status,report,sorted(set(blockers)))
         except Exception:
             # Avoid leaking provider credentials or local paths in future adapter errors.
+            if os.environ.get('HH520_DEBUG_RAISE')=='1':
+                raise
             self.store.finish(row['id'],token,'FAILED','# 启动检查失败\n\n请检查服务器日志与资产完整性。',['STARTUP_CHECK_FAILED'])
         return True
 
@@ -234,15 +307,15 @@ class Application:
         return [body]
 
     @staticmethod
-    def body(env):
+    def body(env, max_bytes=4096):
         if env.get('CONTENT_TYPE','').split(';')[0] != 'application/json':
             raise RequestError(415,'JSON_REQUIRED')
         try:
             n=int(env.get('CONTENT_LENGTH','0'))
         except ValueError:
             raise RequestError(400,'INVALID_CONTENT_LENGTH')
-        if not 0<n<=4096:
-            raise RequestError(413,'BODY_LIMIT_4096_BYTES')
+        if not 0<n<=max_bytes:
+            raise RequestError(413,f'BODY_LIMIT_{max_bytes}_BYTES')
         try:
             value=json.loads(env['wsgi.input'].read(n))
         except (ValueError,UnicodeError):
@@ -251,9 +324,84 @@ class Application:
             raise RequestError(400,'JSON_OBJECT_REQUIRED')
         return value
 
+    def input_index(self, task_id):
+        task=self.store.get(task_id)
+        ref=task.get('input_ref')
+        if not ref:
+            raise RequestError(409,'COLLECTION_INPUT_NOT_READY')
+        attempt=ref.get('attempt_id','')
+        if not re.fullmatch(r'[a-f0-9]{32}',attempt):
+            raise RequestError(500,'INVALID_STORED_INPUT_REFERENCE')
+        base=(self.store.path.parent/'collections'/task_id/attempt).resolve()
+        path=(base/ref.get('package_index','')).resolve()
+        if not path.is_relative_to(base) or not path.is_file():
+            raise RequestError(500,'COLLECTION_INDEX_MISSING')
+        return task,base,json.loads(path.read_text(encoding='utf-8'))
+
+    @staticmethod
+    def validate_match_result(body, expected):
+        required={'match_no','code','report_markdown','modules','results','warnings'}
+        if set(body)!=required:
+            raise RequestError(400,'MATCH_RESULT_FIELDS_INVALID')
+        if body['match_no']!=expected['match_no'] or body['code']!=expected['code']:
+            raise RequestError(409,'MATCH_IDENTITY_MISMATCH')
+        if not isinstance(body['report_markdown'],str) or not 80<=len(body['report_markdown'])<=120000:
+            raise RequestError(400,'REPORT_MARKDOWN_LENGTH_INVALID')
+        module_ids=['data_consistency_audit','data_confidence_score','water_market','team_analysis',
+                    'league_analysis','company_source_analysis','correct_score','soccerstats_htft',
+                    'odds_abnormal_detection','match_risk_engine','conflict_detection',
+                    'cross_model_interaction','calibration']
+        modules=body['modules']
+        if not isinstance(modules,list) or [x.get('module_id') if isinstance(x,dict) else None for x in modules]!=module_ids:
+            raise RequestError(400,'FULL_FROZEN_MODULE_ORDER_REQUIRED')
+        for module in modules:
+            if module.get('status') not in ('COMPLETED','DEGRADED') or not isinstance(module.get('summary'),str) or not module['summary'].strip():
+                raise RequestError(400,'MODULE_EVIDENCE_INVALID')
+            if not isinstance(module.get('evidence_refs'),list) or not all(isinstance(x,str) and x for x in module['evidence_refs']):
+                raise RequestError(400,'MODULE_EVIDENCE_INVALID')
+        if not isinstance(body['results'],dict) or not isinstance(body['warnings'],list):
+            raise RequestError(400,'RESULTS_OR_WARNINGS_INVALID')
+        for key in ('correct_score_top3','htft_top3','asian_handicap','over_under','one_x_two','total_goals','confidence'):
+            if key not in body['results']:
+                raise RequestError(400,'RESULTS_MISSING_'+key.upper())
+
+    def finalize_prediction(self, task_id):
+        task,_,index=self.input_index(task_id)
+        expected=index.get('matches',[])
+        records=self.store.predictions(task_id)
+        if len(records)!=len(expected):
+            missing=sorted({x['match_no'] for x in expected}-{x['match_no'] for x in records})
+            raise RequestError(409,'MISSING_MATCH_RESULTS:'+','.join(map(str,missing)))
+        content={'task_id':task_id,'date':task['payload']['date'],'model_version':'HH520 V2.1-Test',
+                 'prompt_version':'HH520-PROMPT-V2.1','asset_lock_hash':task['asset_hash'],
+                 'snapshot_id':task['input_ref']['snapshot_id'],'matches':[x['payload'] for x in records]}
+        encoded=json.dumps(content,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode('utf-8')
+        content_hash=hashlib.sha256(encoded).hexdigest()
+        commit_id=f"HH520-{task['payload']['date'].replace('-','')}-{content_hash[:16]}"
+        archive=(self.store.path.parent/'predictions'/task['payload']['date']).resolve()
+        archive.mkdir(parents=True,exist_ok=True)
+        path=archive/(commit_id+'.json')
+        if path.exists():
+            if hashlib.sha256(path.read_bytes()).hexdigest()!=content_hash:
+                raise RequestError(409,'PREDICTION_COMMIT_COLLISION')
+        else:
+            with path.open('xb') as output:
+                output.write(encoded)
+                output.flush()
+                os.fsync(output.fileno())
+        commit={'prediction_commit_id':commit_id,'content_sha256':content_hash,
+                'storage':'server-immutable-v1','created_at':datetime.now(timezone.utc).isoformat(),
+                'match_count':len(records)}
+        header=(f"# HH520 V2.1-Test 完整预测报告\n\n日期：{task['payload']['date']}\n\n"
+                f"数据快照：{task['input_ref']['snapshot_id']}\n\nPrediction Commit：{commit_id}\n\n"
+                "模型核心保持冻结；Upgrade Package 1：PARKED。\n\n")
+        report=header+'\n\n'.join(x['payload']['report_markdown'] for x in records)
+        return self.store.complete_prediction(task_id,commit,report)[0],report
+
     def route(self,method,path,env):
         if method=='GET' and path=='/health':
-            return 200,{'gateway':'ready','prediction':'blocked','release':'0.3.0',
+            readiness=verify(self.root)
+            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.0',
                        'collection':'configured' if os.environ.get('FIRECRAWL_ENDPOINT') and os.environ.get('FIRECRAWL_API_KEY') else 'not_configured',
                        'delivery':'polling_only_no_chat_push'}
         if method=='POST' and path=='/v1/tasks':
@@ -263,6 +411,43 @@ class Application:
             payload=parse_command(body['command'])
             task_id,created=self.store.create(body['request_id'],payload,digest(self.root/'versions/asset_lock.json'))
             return (202 if created else 200),{'task_id':task_id,'status_url':f'/v1/tasks/{task_id}','report_url':f'/v1/tasks/{task_id}/report','created':created}
+        match_input=re.fullmatch(r'/v1/tasks/([a-f0-9]{32})/matches(?:/(\d{1,3}))?',path)
+        if match_input and method=='GET':
+            task_id,number=match_input.groups()
+            task,base,index=self.input_index(task_id)
+            if number is None:
+                saved={x['match_no'] for x in self.store.predictions(task_id)}
+                matches=[{**x,'analysis_saved':x['match_no'] in saved} for x in index.get('matches',[])]
+                return 200,{'task_id':task_id,'status':task['status'],'snapshot_id':task['input_ref']['snapshot_id'],
+                            'match_count':len(matches),'matches':matches,'required_module_order':[
+                            'data_consistency_audit','data_confidence_score','water_market','team_analysis','league_analysis',
+                            'company_source_analysis','correct_score','soccerstats_htft','odds_abnormal_detection',
+                            'match_risk_engine','conflict_detection','cross_model_interaction','calibration']}
+            match_no=int(number)
+            item=next((x for x in index.get('matches',[]) if x['match_no']==match_no),None)
+            if not item:
+                raise RequestError(404,'MATCH_NOT_FOUND')
+            package=(base/task['input_ref']['package_dir']/item['file']).resolve()
+            if not package.is_relative_to(base) or not package.is_file():
+                raise RequestError(500,'MATCH_PACKAGE_MISSING')
+            return 200,compact_match(package)
+        match_submit=re.fullmatch(r'/v1/tasks/([a-f0-9]{32})/matches/(\d{1,3})/prediction',path)
+        if match_submit and method=='POST':
+            task_id,number=match_submit.groups()
+            _,_,index=self.input_index(task_id)
+            expected=next((x for x in index.get('matches',[]) if x['match_no']==int(number)),None)
+            if not expected:
+                raise RequestError(404,'MATCH_NOT_FOUND')
+            body=self.body(env,262144)
+            self.validate_match_result(body,expected)
+            content_hash,created=self.store.save_match_prediction(task_id,int(number),expected['code'],body)
+            return (202 if created else 200),{'task_id':task_id,'match_no':int(number),'saved':True,
+                                               'created':created,'content_sha256':content_hash}
+        finalize=re.fullmatch(r'/v1/tasks/([a-f0-9]{32})/finalize',path)
+        if finalize and method=='POST':
+            commit,report=self.finalize_prediction(finalize.group(1))
+            return 200,{'task_id':finalize.group(1),'status':'COMPLETED','is_prediction':True,
+                        'prediction_commit':commit,'report':report}
         match=re.fullmatch(r'/v1/tasks/([a-f0-9]{32})(/report|/cancel)?',path)
         if match:
             task_id,action=match.groups()
@@ -272,7 +457,10 @@ class Application:
             if method=='GET':
                 task=self.store.get(task_id)
                 if action=='/report':
-                    return 200,{'task_id':task_id,'status':task['status'],'report':task['report'],'ready':task['report'] is not None,'is_prediction':False}
+                    is_prediction=task['status']=='COMPLETED' and task.get('prediction_commit') is not None
+                    return 200,{'task_id':task_id,'status':task['status'],'report':task['report'],
+                                'ready':task['report'] is not None,'is_prediction':is_prediction,
+                                'prediction_commit':task.get('prediction_commit')}
                 if not action:
                     return 200,task
         raise RequestError(404,'NOT_FOUND')

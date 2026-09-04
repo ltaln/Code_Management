@@ -1,5 +1,5 @@
 """Run the existing, pinned Firecrawl collector in a private per-task directory."""
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import hashlib
 import json
 import os
@@ -82,6 +82,17 @@ class FirecrawlCollector:
         complete = (index['match_count'] > 0 and index['complete_matches'] == index['match_count']
                     and not discovery['truncated'] and not discovery['failed_pages']
                     and not index.get('unassigned_discoveries'))
+        now=datetime.now(timezone.utc)
+        late_matches=[]
+        for item in index['matches']:
+            package=json.loads((work/package_ref['package_dir']/item['file']).read_text(encoding='utf-8'))
+            try:
+                kickoff=datetime.fromisoformat(package['kickoff_at_raw']).replace(tzinfo=timezone(timedelta(hours=8)))
+                if now > kickoff.astimezone(timezone.utc)-timedelta(minutes=30):
+                    late_matches.append(item['match_no'])
+            except (TypeError,ValueError,KeyError):
+                late_matches.append(item['match_no'])
+        live_cutoff_safe=not late_matches
         result = {'task_id':task_id,'attempt_id':attempt_id,'date':target_date,
                   'collected_at':datetime.now(timezone.utc).isoformat(),
                   'snapshot_id':manifest['snapshot_id'],'collector':'Firecrawl',
@@ -91,8 +102,11 @@ class FirecrawlCollector:
                   'failed_pages':discovery['failed_pages'],'truncated':discovery['truncated'],
                   'unassigned_count':len(index.get('unassigned_discoveries',[])),
                   'collection_complete':complete,'is_prediction':False,
-                  'prediction_eligible':False,'historical_cutoff_verified':False,
+                  'prediction_eligible':complete and live_cutoff_safe,'historical_cutoff_verified':False,
+                  't_minus_30_verified':live_cutoff_safe,'late_or_unknown_cutoff_matches':late_matches,
                   'source_validation':'FIRECRAWL_ONLY_NO_DIRECT_FETCH_COMPARISON',
+                  'package_index':package_ref['index'],
+                  'package_dir':package_ref['package_dir'],
                   'files':hashes}
         content=json.dumps(result,ensure_ascii=False,sort_keys=True,indent=2).encode('utf-8')
         with (work/'receipt.json').open('xb') as output:
@@ -110,4 +124,5 @@ def collection_report(result):
             f"识别 {result['match_count']} 场；资料齐全且身份核对通过 {result['complete_matches']} 场。\n\n"
             f"达到页数上限：{'是' if result['truncated'] else '否'}；未归属资料：{result['unassigned_count']}。\n\n"
             f"快照：{result['snapshot_id']}\n\n归档校验：{result['receipt_sha256']}\n\n"
-            "这不是比赛预测。原始页面和逐场数据包已保存；历史 T-30 与赛后字段隔离尚未验证，不能直接交给预测模型。")
+            f"T-30 赛前门：{'通过' if result.get('t_minus_30_verified') else '未通过'}；不合格或开赛时间未知场次：{result.get('late_or_unknown_cutoff_matches',[])}。\n\n"
+            "这不是比赛预测。原始页面和逐场数据包已保存；历史重建仍需单独验证赛后字段隔离。")

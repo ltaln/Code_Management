@@ -1,8 +1,10 @@
 import io
+import hashlib
 import json
 from pathlib import Path
 import sqlite3
 import sys
+import tempfile
 import threading
 import unittest
 import urllib.request
@@ -16,7 +18,9 @@ from service import Store, Worker, Application, RequestError, parse_command, dig
 
 class GatewayTests(unittest.TestCase):
     def setUp(self):
-        self.path=ROOT/'runtime'/'gateway_tests'/uuid.uuid4().hex/'tasks.sqlite3'
+        self.temp=tempfile.TemporaryDirectory()
+        self.addCleanup(self.temp.cleanup)
+        self.path=Path(self.temp.name)/'tasks.sqlite3'
         self.store=Store(self.path)
         self.worker=Worker(self.store)
         self.app=Application(self.store,'test-token-'+'x'*40)
@@ -44,7 +48,51 @@ class GatewayTests(unittest.TestCase):
         row=reopened.get(task)
         self.assertEqual(row['status'],'BLOCKED')
         self.assertIn('未生成比分',row['report'])
-        self.assertIn('FLOW_ORDER_CONFLICT',row['blockers'])
+        self.assertIn('PREDICTION_REQUIRES_FUTURE_FIXTURE_DATE_FOR_T_MINUS_30_SAFETY',row['blockers'])
+
+    def test_external_gpt_handoff_and_immutable_commit(self):
+        task=self.create('预测 2099-08-11 所有比赛','future-prediction')
+        class FakeCollector:
+            def collect(inner,task_id,target_date,pulse,attempt_id):
+                base=self.path.parent/'collections'/task_id/attempt_id
+                package_dir=Path('data/matches')/target_date/'snapshot_identity_v1'
+                (base/package_dir).mkdir(parents=True)
+                package={'date':target_date,'match_no':1,'code':'20990811001','xi':'1',
+                         'kickoff_at_raw':'2099-08-12 00:30','identity_check':{'result':'PASS'},
+                         'package_version':'identity-v1','snapshot_id':'snapshot','complete':True,
+                         'sections':[{'category':'mixed_data','url':'https://example.test/1','markdown':'比赛资料 '*100}],
+                         'shared_context':[]}
+                (base/package_dir/'match_001_20990811001.json').write_text(json.dumps(package,ensure_ascii=False),encoding='utf-8')
+                index={'matches':[{'match_no':1,'code':'20990811001','xi':'1','file':'match_001_20990811001.json','complete':True}],
+                       'match_count':1,'complete_matches':1}
+                index_path=package_dir/'index.json'
+                (base/index_path).write_text(json.dumps(index),encoding='utf-8')
+                return {'task_id':task_id,'attempt_id':attempt_id,'date':target_date,'snapshot_id':'snapshot',
+                        'package_index':index_path.as_posix(),'package_dir':package_dir.as_posix(),
+                        'collection_complete':True,'prediction_eligible':True,'scraped_pages':6,'failed_pages':0,
+                        'match_count':1,'complete_matches':1,'truncated':False,'unassigned_count':0,
+                        'receipt_sha256':'a'*64}
+        Worker(self.store,collector=FakeCollector()).once()
+        self.assertEqual(self.store.get(task)['status'],'AWAITING_GPT')
+        status,index=self.app.route('GET',f'/v1/tasks/{task}/matches',{})
+        self.assertEqual(status,200)
+        status,match=self.app.route('GET',f'/v1/tasks/{task}/matches/1',{})
+        self.assertEqual(match['package_sha256'],hashlib.sha256((self.path.parent/'collections'/task/self.store.get(task)['input_ref']['attempt_id']/'data/matches/2099-08-11/snapshot_identity_v1/match_001_20990811001.json').read_bytes()).hexdigest())
+        modules=[{'module_id':name,'status':'COMPLETED','summary':'已按冻结流程执行','evidence_refs':['mixed_data']}
+                 for name in index['required_module_order']]
+        payload={'match_no':1,'code':'20990811001','report_markdown':'## 第1场\n\n'+'完整流程分析。'*20,
+                 'modules':modules,'results':{'correct_score_top3':[],'htft_top3':[],
+                 'asian_handicap':'PASS','over_under':'PASS','one_x_two':'PASS','total_goals':'PASS','confidence':'低'},
+                 'warnings':[]}
+        encoded=json.dumps(payload,ensure_ascii=False).encode('utf-8')
+        env={'CONTENT_TYPE':'application/json','CONTENT_LENGTH':str(len(encoded)),'wsgi.input':io.BytesIO(encoded)}
+        status,saved=self.app.route('POST',f'/v1/tasks/{task}/matches/1/prediction',env)
+        self.assertEqual(status,202)
+        status,final=self.app.route('POST',f'/v1/tasks/{task}/finalize',{})
+        self.assertTrue(final['is_prediction'])
+        self.assertEqual(self.store.get(task)['status'],'COMPLETED')
+        status,retry=self.app.route('POST',f'/v1/tasks/{task}/finalize',{})
+        self.assertEqual(retry['prediction_commit'],final['prediction_commit'])
 
     def test_probe_is_not_prediction(self):
         task=self.create()

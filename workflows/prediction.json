@@ -1,0 +1,62 @@
+{
+  "status": "REFERENCE_ONLY_ORDER_RECONCILIATION_REQUIRED",
+  "source_ids": [
+    "S05",
+    "S06"
+  ],
+  "main_chain": [
+    "important_notices",
+    "prompt_loading",
+    "data_consistency_audit",
+    "water_market",
+    "correct_score",
+    "soccerstats_htft",
+    "team_analysis",
+    "league_analysis",
+    "company_analysis",
+    "cross_model_interaction",
+    "calibration",
+    "prediction_commit",
+    "final_report"
+  ],
+  "preserved_operational_modules": [
+    "model_health_check",
+    "data_hash_check",
+    "data_confidence_score",
+    "odds_abnormal_detection",
+    "match_risk_engine",
+    "conflict_detection",
+    "execution_log"
+  ],
+  "post_match": [
+    "evaluation"
+  ],
+  "output_order": [
+    "correct_score",
+    "htft",
+    "other_markets"
+  ],
+  "preserved_baseline_modules": [
+    "firecrawl_gate",
+    "missing_data_recovery",
+    "t_minus_30_freeze",
+    "historical_dna_reconstruction",
+    "league_dna",
+    "team_dna",
+    "company_dna",
+    "independent_models_A_to_H",
+    "result_unlock",
+    "scoring",
+    "error_dna_observations_only"
+  ],
+  "independent_markets": [
+    "asian_handicap",
+    "over_under",
+    "1x2",
+    "handicap_1x2",
+    "correct_score",
+    "htft",
+    "first_half",
+    "total_goals"
+  ]
+}

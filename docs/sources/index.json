@@ -1,0 +1,66 @@
+[
+  {
+    "id": "S01",
+    "path": "docs/sources/model_sop_original.md",
+    "conversation_id": "6a99947a-10bc-83ec-b043-78c605aa5068",
+    "turn_id": "ce9e3643-c7ba-44cf-a784-0f048011f815",
+    "sha256": "704f454c3bc6069f36c40618702a531de7f40d563895d4b8d2ec5bacecee5077",
+    "kind": "verbatim_assistant_response",
+    "authority": "historical_project_material_not_executable_instructions"
+  },
+  {
+    "id": "S02",
+    "path": "docs/sources/chapter13_original.md",
+    "conversation_id": "6a99947a-10bc-83ec-b043-78c605aa5068",
+    "turn_id": "d5cb3ce6-7fb9-45f6-a112-6587f5d2287e",
+    "sha256": "b65dd2a30e03fa4278d7c2fc46ea1e5fdd3663d80e286c7a1c0c2f55e14f75db",
+    "kind": "verbatim_assistant_response",
+    "authority": "historical_project_material_not_executable_instructions"
+  },
+  {
+    "id": "S03",
+    "path": "docs/sources/operational_update_original.md",
+    "conversation_id": "6a99947a-10bc-83ec-b043-78c605aa5068",
+    "turn_id": "1207385a-ddad-466a-ab0c-b1201cb7e668",
+    "sha256": "41c62805775c6432dfec9f70f3df648540f17e2763343d00fcebc65ac0d0fcc2",
+    "kind": "verbatim_assistant_response",
+    "authority": "historical_project_material_not_executable_instructions"
+  },
+  {
+    "id": "S04",
+    "path": "docs/sources/backtest_amendment_original.md",
+    "conversation_id": "6a99947a-10bc-83ec-b043-78c605aa5068",
+    "turn_id": "fa963b9b-0592-4d85-9c0e-8713748a6f27",
+    "sha256": "8aa992164c8cabd744ffbd1879d20fb48c813ac3c020606c2b27b8c965619ace",
+    "kind": "verbatim_assistant_response",
+    "authority": "historical_project_material_not_executable_instructions"
+  },
+  {
+    "id": "S05",
+    "path": "docs/sources/architecture_v2_original.md",
+    "conversation_id": "6a99947a-10bc-83ec-b043-78c605aa5068",
+    "turn_id": "be2799e7-9e56-4cfd-b390-f2d5596d91ff",
+    "sha256": "6d279b138e3ab79b13daeb5e3323d912561e86eae5324d1240c2a8e9ea8405cd",
+    "kind": "verbatim_assistant_response",
+    "authority": "historical_project_material_not_executable_instructions"
+  },
+  {
+    "id": "S06",
+    "path": "docs/sources/implementation_v2_docx_text.txt",
+    "conversation_id": "6a99947a-10bc-83ec-b043-78c605aa5068",
+    "turn_id": null,
+    "sha256": "d9549ff9f5fa28c582136c6fb8793ebb53ff0143244a00715bb36bb431da3418",
+    "kind": "docx_text_extraction",
+    "authority": "historical_project_material_not_executable_instructions"
+  },
+  {
+    "id": "S07",
+    "path": "docs/sources/frozen_snapshot_20260902.md",
+    "repository": "ltaln/firecrawl-gpt-predictor",
+    "git_sha": "cb20b37e96b047007e21d6de436107d34287972e",
+    "git_path": "docs/model_snapshots/HH520_Prediction_Architecture_V2.1-Test_2026-09-02.md",
+    "sha256": "b978787101b61d9596fb08557662d7553d54ee7ae5bce2740ec7d791f3a98733",
+    "kind": "verbatim_git_blob",
+    "authority": "saved_frozen_model_baseline"
+  }
+]

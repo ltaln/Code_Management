@@ -1,0 +1,31 @@
+{
+  "model_id": "HH520 V2.1-Test",
+  "prompt_version": "HH520-PROMPT-V2.1",
+  "core_frozen": true,
+  "upgrade_package_1": "PARKED",
+  "asset_status": "RECOVERED_WITH_GAPS",
+  "runtime_enabled": false,
+  "prompt_path": "prompts/HH520-PROMPT-V2.1.txt",
+  "source_ids": [
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "S05",
+    "S06",
+    "S07"
+  ],
+  "blockers": [
+    "BASELINE_REVISION_CONFLICT",
+    "FLOW_ORDER_CONFLICT",
+    "NUMERIC_RULES_UNSPECIFIED",
+    "BACKTEST_PROMPT_MISSING",
+    "RUNTIME_NOT_CONNECTED"
+  ],
+  "baseline_prompt_stack": {
+    "master": "v1.1",
+    "prediction": "v1.1",
+    "backtest": "v1.1",
+    "soccerstats_htft_dna": "v1.0"
+  }
+}

@@ -1,0 +1,125 @@
+HH520 Football AI System 完整实施设计方案 V2.0
+
+一、项目目标
+建立一个以 GPT 为核心执行者的自动化足球预测系统。
+用户通过手机 ChatGPT 输入：
+“预测 某日期 全部比赛”
+系统自动完成任务创建、数据采集、模型加载、预测分析、结果输出和记录保存。
+二、最终系统架构
+用户
+↓
+手机 ChatGPT APP
+↓
+GPT智能控制中心
+↓
+任务管理中心
+任务管理中心连接：
+1. 数据采集服务器：负责比赛数据、赔率、阵容、历史数据。
+2. GitHub Code_Management：负责模型资产、提示词、流程、文档。
+数据返回后，由 GPT 执行预测和最终输出。
+三、核心职责
+GPT：
+- 执行提示词
+- 数据一致性审计
+- Water Market分析
+- Correct Score分析
+- 半全场分析
+- Cross Model Interaction
+- Calibration
+- 最终结果输出
+GitHub：
+- 保存模型规则
+- 保存提示词
+- 保存流程文件
+- 保存README和版本记录
+服务器：
+- 数据采集
+- 数据验证
+- 输出数据包
+四、模型保护原则
+HH520 V2.1-Test 是唯一稳定版本。
+任何架构建设：
+不修改模型逻辑；
+不修改提示词；
+不修改权重；
+不修改Calibration。
+五、预测固定流程
+重要注意事项
+↓
+Prompt加载
+↓
+数据一致性审计
+↓
+Water Market
+↓
+Correct Score
+↓
+SoccerSTATS HT/FT
+↓
+球队/联赛/公司分析
+↓
+Cross Model Interaction
+↓
+Calibration
+↓
+Prediction Commit
+↓
+最终输出
+输出顺序：
+1. 精准比分
+2. 半全场
+3. 其他市场
+六、Code_Management仓库规划
+Code_Management
+README.md
+PROJECT_MEMORY.md
+WAKE_CODE.md
+config/
+models/
+prompts/
+workflows/
+rules/
+calibration/
+task_manager/
+data_engine/
+prediction/
+backtest/
+evaluation/
+versions/
+logs/
+docs/
+七、Phase 1-Phase 6
+Phase 1：
+基础架构、配置文件、项目记忆、唤醒系统。
+Phase 2：
+迁移HH520 V2.1-Test资产。
+Phase 3：
+任务管理中心，实现一句话启动。
+Phase 4：
+数据服务器接口。
+Phase 5：
+GPT自动预测执行。
+Phase 6：
+回测系统建设。
+八、回测设计
+采用 Prediction Archive First。
+有预测数据：
+直接调用预测结果比较。
+无预测数据：
+重新采集、预测、生成记录后回测。
+九、唤醒系统
+建立 WAKE_CODE.md。
+用于：
+更换账号、新聊天后恢复项目上下文。
+十、README要求
+最终必须生成详细README。
+包括：
+项目目标、架构、模型说明、预测流程、回测流程、升级流程、故障恢复、新账号接管方法。
+十一、聊天模式能完成多少
+聊天模式可以完成：
+架构设计、模型设计、Prompt设计、流程设计、文档设计、代码规划、代码审核、预测分析。
+不适合单独承担：
+长期后台运行、持续监控、大规模自动任务。
+最终方案：
+GPT + 任务管理中心 + 数据服务器 + GitHub资产库。
+

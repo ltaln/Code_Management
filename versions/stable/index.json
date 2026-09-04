@@ -1,0 +1,6 @@
+{
+  "channel": "stable",
+  "model_ref": "models/HH520_V2.1-Test/manifest.json",
+  "status": "FROZEN_WITH_SOURCE_GAPS",
+  "entries": []
+}

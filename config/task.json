@@ -1,0 +1,26 @@
+{
+  "contract_version": "0.1.0",
+  "implementation_status": "DESIGN_ONLY",
+  "default_scope": "ALL",
+  "new_request_requires_new_snapshot": true,
+  "resume_requires_same_snapshot_and_assets": true,
+  "retry_policy": {
+    "max_attempts": 3,
+    "backoff_seconds": [
+      5,
+      15,
+      45
+    ],
+    "retryable": [
+      "TIMEOUT",
+      "RATE_LIMIT",
+      "TEMPORARY_NETWORK"
+    ],
+    "non_retryable": [
+      "MODEL_MISMATCH",
+      "ASSET_HASH_MISMATCH",
+      "PROMPT_MISSING",
+      "FLOW_ORDER_CONFLICT"
+    ]
+  }
+}

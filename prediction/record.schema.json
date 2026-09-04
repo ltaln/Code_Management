@@ -1,0 +1,134 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Prediction content before Git receipt",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "prediction_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "task_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "match_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "snapshot_id": {
+      "type": "string",
+      "minLength": 1
+    },
+    "model_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "prompt_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "dna_version": {
+      "type": "string",
+      "minLength": 1
+    },
+    "asset_git_sha": {
+      "type": "string",
+      "minLength": 1
+    },
+    "record_type": {
+      "enum": [
+        "live_prediction",
+        "reconstructed_historical"
+      ]
+    },
+    "snapshot_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "asset_lock_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "prompt_hash": {
+      "type": "string",
+      "pattern": "^[a-f0-9]{64}$"
+    },
+    "cutoff": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "created_at": {
+      "type": "string",
+      "format": "date-time"
+    },
+    "modules": {
+      "type": "array",
+      "items": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "title": "Module evidence",
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "module_id": {
+            "type": "string",
+            "minLength": 1
+          },
+          "status": {
+            "enum": [
+              "COMPLETED",
+              "DEGRADED",
+              "FAILED"
+            ]
+          },
+          "evidence_refs": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          },
+          "output": {
+            "type": "object"
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "minLength": 1
+            }
+          }
+        },
+        "required": [
+          "module_id",
+          "status",
+          "evidence_refs",
+          "output",
+          "warnings"
+        ]
+      }
+    },
+    "results": {
+      "type": "object",
+      "description": "Output structure awaits frozen model reconciliation; no synthetic probabilities."
+    }
+  },
+  "required": [
+    "prediction_id",
+    "task_id",
+    "match_id",
+    "snapshot_id",
+    "model_version",
+    "prompt_version",
+    "dna_version",
+    "asset_git_sha",
+    "record_type",
+    "snapshot_hash",
+    "asset_lock_hash",
+    "prompt_hash",
+    "cutoff",
+    "created_at",
+    "modules",
+    "results"
+  ]
+}

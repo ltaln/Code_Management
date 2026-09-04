@@ -1,0 +1,8 @@
+{
+  "stable": "HH520 V2.1-Test",
+  "manifest": "models/HH520_V2.1-Test/manifest.json",
+  "lock": "versions/asset_lock.json",
+  "prompt": "prompts/HH520-PROMPT-V2.1.txt",
+  "calibration_implementation": null,
+  "model_parameters": null
+}

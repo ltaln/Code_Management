@@ -13,3 +13,5 @@
 下一步：处理 docs/GAPS.md；保存来源、差异与验证证据后才能打开运行开关。不要拿近期预测的比分或置信分数反推参数。不要修改旧数据仓库的现有预测系统。
 
 新增实际来源：S07 为旧仓库已保存的冻结模型快照，硬规则与独立市场均已保留。Master/Prediction/Backtest v1.1 与后期 Prompt V2.1 的映射未明确，加入 BASELINE_REVISION_CONFLICT。
+
+工程进展 0.2.0：实际实现 task_manager/service.py，SQLite 持久任务、worker、取消和报告 API；连接检查不产生预测。支持候选 Actions schema 与 Docker 部署草案。缺服务器部署入口，未作手机端验收。用户要求尽量节省 Codex 额度：复用资产、先离线测试、一次一场联调、不反复采集。

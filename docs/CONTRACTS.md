@@ -8,3 +8,5 @@ JSON Schema 为 Draft 2020-12 契约，datetime 和 date 需要启用 format 验
 业务校验仍须实现：身份、T-30、数据 Hash、唯一快照、去重、模型完整顺序、概率归一化、市场结算、提交条件写入。宽松 output/results 保留原 GPT 输出空间，不能仅凭 schema valid 判定预测有效。
 
 prediction/ports.py 为 Python Protocol 交接骨架，方法没有运行实现。不得调用空方法并把 None 当作预测结果。
+
+0.2.0 命令 API 使用 integrations/gpt-actions.openapi.json；它的请求是 command/request_id，返回实际服务状态，尚不等同完整预测任务 schema 的运行实现。

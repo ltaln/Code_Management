@@ -11,3 +11,5 @@
 取消：记 cancel_requested，模块边界停止，已完成结果保留；已提交结果不删除。批次有场次失败标记 PARTIAL_FAILED，不能返回全部完成。用户关闭手机不取消任务，完成后由已接通的任务查询/回调返回结果。
 
 接口草案：POST /v1/tasks 创建（202，返回 task_id）；GET /v1/tasks/{id} 读取；POST /v1/tasks/{id}/cancel 请求取消。访问需鉴权，request_id 支持重试，不在日志记凭据。
+
+0.2.0 已实现上述状态机的前段：CREATED → STARTUP_CHECK → BLOCKED/FAILED/CANCELLED；检查连接可到 COMPLETED。SQLite、请求去重、租约恢复和报告读取已有代码，采集/分析/校准/提交阶段未实现。部署见 docs/MOBILE_GATEWAY.md。

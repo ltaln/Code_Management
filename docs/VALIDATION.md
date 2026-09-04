@@ -22,3 +22,9 @@
 旧冻结快照来自 `ltaln/firecrawl-gpt-predictor` 的提交 `cb20b37e96b047007e21d6de436107d34287972e`，从 Git blob 原样读取。旧仓库仅只读访问，本次未推送修改。
 
 本地重现：`python scripts/verify_assets.py`；`python scripts/wake.py`；`python scripts/verify_assets.py --require-ready`。完整负向测试见 tests/check_delivery.py，额外验证依赖在 tests/requirements.txt。
+
+## 工程版本 0.2.0
+
+8 项新增任务网关测试通过，包括真实本地 HTTP 创建→后台检查→报告读取、请求去重/冲突、进程重开后的持久化、过期租约与旧 worker 隔离、取消保护、认证和无效输入。预测任务按预期进入 BLOCKED；“检查连接”明确不产生预测。
+
+27 个冻结文件及 asset_lock.json 与上版提交完全一致，资产校验通过。未产生 Firecrawl/OpenAI 调用。未在 Linux/Docker 服务器构建或部署，手机 Actions 导入及原会话自动回传未验证。

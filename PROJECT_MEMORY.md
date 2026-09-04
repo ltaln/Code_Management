@@ -15,3 +15,5 @@
 新增实际来源：S07 为旧仓库已保存的冻结模型快照，硬规则与独立市场均已保留。Master/Prediction/Backtest v1.1 与后期 Prompt V2.1 的映射未明确，加入 BASELINE_REVISION_CONFLICT。
 
 工程进展 0.2.0：实际实现 task_manager/service.py，SQLite 持久任务、worker、取消和报告 API；连接检查不产生预测。支持候选 Actions schema 与 Docker 部署草案。缺服务器部署入口，未作手机端验收。用户要求尽量节省 Codex 额度：复用资产、先离线测试、一次一场联调、不反复采集。
+
+部署更新：已使用用户提供的服务器完成 /opt/hh520 部署，HTTPS 地址与验收见 docs/DEPLOYMENT.md。原 Firecrawl 未重启、冻结模型未改。私有任务令牌仅在服务器 /etc/hh520/gateway.env，不是 SSH 密码。手机 ChatGPT 编辑器读取超时，账户侧连接未建立；不能宣称全自动预测可用。

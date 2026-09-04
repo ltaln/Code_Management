@@ -7,7 +7,7 @@
   },
   "servers": [
     {
-      "url": "https://YOUR-HH520-HOST.example"
+      "url": "https://hh520.156.225.23.17.sslip.io"
     }
   ],
   "security": [

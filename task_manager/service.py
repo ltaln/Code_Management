@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import contextmanager
 from datetime import date, datetime, timezone
 import hashlib
 import hmac
@@ -32,14 +33,14 @@ def parse_command(command):
     command = ' '.join(command.strip().split())
     if command == '检查连接':
         return {'mode': 'connection_check', 'date': None, 'scope': 'NONE'}
-    match = re.fullmatch(r'(预测|回测)\s+(\d{4}-\d{2}-\d{2})\s+(全部比赛|所有比赛)', command)
+    match = re.fullmatch(r'(预测|回测|采集)\s+(\d{4}-\d{2}-\d{2})\s+(全部比赛|所有比赛)', command)
     if not match:
         raise RequestError(400, 'SUPPORTED: 预测 YYYY-MM-DD 所有比赛 / 回测 YYYY-MM-DD 所有比赛 / 检查连接')
     try:
         date.fromisoformat(match[2])
     except ValueError:
         raise RequestError(400, 'INVALID_DATE')
-    return {'mode': 'prediction' if match[1] == '预测' else 'backtest', 'date': match[2], 'scope': 'ALL'}
+    return {'mode': {'预测':'prediction','回测':'backtest','采集':'collection'}[match[1]], 'date': match[2], 'scope': 'ALL'}
 
 
 class Store:
@@ -60,10 +61,15 @@ class Store:
                     at REAL NOT NULL, status TEXT NOT NULL, detail TEXT NOT NULL);
             ''')
 
+    @contextmanager
     def db(self):
         db = sqlite3.connect(self.path, timeout=10)
         db.row_factory = sqlite3.Row
-        return db
+        try:
+            with db:
+                yield db
+        finally:
+            db.close()
 
     @staticmethod
     def event(db, task_id, status, detail):
@@ -104,11 +110,11 @@ class Store:
         with self.db() as db:
             db.execute('BEGIN IMMEDIATE')
             now = time.time()
-            expired = db.execute("SELECT id,attempts FROM tasks WHERE status='STARTUP_CHECK' AND lease_until<?", (now,)).fetchall()
+            expired = db.execute("SELECT id,attempts FROM tasks WHERE status IN ('STARTUP_CHECK','COLLECTING') AND lease_until<?", (now,)).fetchall()
             for row in expired:
                 state = 'FAILED' if row['attempts'] >= 3 else 'CREATED'
                 db.execute('UPDATE tasks SET status=?,lease_token=NULL,lease_until=NULL,updated=? WHERE id=?', (state,now,row['id']))
-                self.event(db,row['id'],state,'启动检查中断后恢复' if state=='CREATED' else '启动检查重试耗尽')
+                self.event(db,row['id'],state,'任务中断后恢复，新尝试保留原采集记录' if state=='CREATED' else '任务重试耗尽')
             row = db.execute("SELECT * FROM tasks WHERE status='CREATED' ORDER BY created LIMIT 1").fetchone()
             if not row:
                 return None
@@ -117,13 +123,23 @@ class Store:
             self.event(db,row['id'],'STARTUP_CHECK','校验冻结资产与运行条件')
             return dict(row), token
 
+    def renew(self, task_id, token, stage=None):
+        with self.db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            now=time.time()
+            updated=db.execute("UPDATE tasks SET lease_until=?,updated=?,status=COALESCE(?,status) WHERE id=? AND lease_token=? AND status IN ('STARTUP_CHECK','COLLECTING') AND lease_until>=?",
+                (now+60,now,stage,task_id,token,now)).rowcount
+            if updated and stage:
+                self.event(db,task_id,stage,'后台采集正在运行，关闭手机不影响任务')
+            return bool(updated)
+
     def finish(self, task_id, token, status, report, blockers):
         with self.db() as db:
             db.execute('BEGIN IMMEDIATE')
-            updated = db.execute("UPDATE tasks SET status=?,report=?,blockers=?,updated=?,lease_token=NULL,lease_until=NULL WHERE id=? AND lease_token=? AND status='STARTUP_CHECK' AND lease_until>=?",
+            updated = db.execute("UPDATE tasks SET status=?,report=?,blockers=?,updated=?,lease_token=NULL,lease_until=NULL WHERE id=? AND lease_token=? AND status IN ('STARTUP_CHECK','COLLECTING') AND lease_until>=?",
                 (status,report,json.dumps(blockers),time.time(),task_id,token,time.time())).rowcount
             if updated:
-                self.event(db,task_id,status,'连接检查完成' if status=='COMPLETED' else '停止于启动检查，未调用采集或预测')
+                self.event(db,task_id,status,'报告已保存；是否为预测以报告类型为准')
             return bool(updated)
 
     def cancel(self, task_id):
@@ -132,14 +148,15 @@ class Store:
             row=db.execute('SELECT status FROM tasks WHERE id=?',(task_id,)).fetchone()
             if not row:
                 raise RequestError(404,'TASK_NOT_FOUND')
-            if row['status'] in ('CREATED','STARTUP_CHECK'):
+            if row['status'] in ('CREATED','STARTUP_CHECK','COLLECTING'):
                 db.execute("UPDATE tasks SET status='CANCELLED',updated=?,lease_token=NULL,lease_until=NULL WHERE id=?",(time.time(),task_id))
                 self.event(db,task_id,'CANCELLED','用户取消；不会删除已保存记录')
 
 
 class Worker:
-    def __init__(self, store, root=ROOT):
+    def __init__(self, store, root=ROOT, collector=None):
         self.store, self.root = store, root
+        self.collector=collector
         self.stop = threading.Event()
 
     def once(self):
@@ -153,7 +170,22 @@ class Worker:
             blockers = list(check['errors'])
             if digest(self.root/'versions/asset_lock.json') != row['asset_hash']:
                 blockers.append('ASSETS_CHANGED_SINCE_TASK_CREATED')
-            if payload['mode'] == 'connection_check' and not blockers:
+            if payload['mode'] == 'collection' and not blockers:
+                from data_engine.collector import FirecrawlCollector, CollectionError, collection_report
+                collector=self.collector or FirecrawlCollector(self.store.path.parent/'collections')
+                if not self.store.renew(row['id'],token,'COLLECTING'):
+                    return True
+                try:
+                    result=collector.collect(row['id'],payload['date'],
+                        lambda: not self.stop.is_set() and self.store.renew(row['id'],token),token)
+                    status='COMPLETED' if result['collection_complete'] else 'PARTIAL'
+                    report=collection_report(result)
+                    blockers=[] if result['collection_complete'] else ['COLLECTION_INCOMPLETE']
+                except CollectionError as exc:
+                    status='FAILED'
+                    blockers=[str(exc)]
+                    report='# 采集未完成\n\n'+str(exc)+'\n\n未生成预测；已保存的原始资料保留在本次任务目录。'
+            elif payload['mode'] == 'connection_check' and not blockers:
                 status = 'COMPLETED'
                 report = '# 连接检查完成\n\n命令已接收、任务已持久保存、后台检查已执行、报告已保存。\n\n这不是比赛预测。真实预测仍受模型资料与服务接入缺口阻塞。'
             else:
@@ -221,7 +253,9 @@ class Application:
 
     def route(self,method,path,env):
         if method=='GET' and path=='/health':
-            return 200,{'gateway':'ready','prediction':'blocked','release':'0.2.0','delivery':'polling_only_no_chat_push'}
+            return 200,{'gateway':'ready','prediction':'blocked','release':'0.3.0',
+                       'collection':'configured' if os.environ.get('FIRECRAWL_ENDPOINT') and os.environ.get('FIRECRAWL_API_KEY') else 'not_configured',
+                       'delivery':'polling_only_no_chat_push'}
         if method=='POST' and path=='/v1/tasks':
             body=self.body(env)
             if set(body)!={'request_id','command'}:

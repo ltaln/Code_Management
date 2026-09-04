@@ -1,5 +1,7 @@
 # HH520 Football AI System
 
+0.3.0：加入既有 Firecrawl 程序的持久采集任务、逐场身份关联、采集回执和取消恢复。使用 `采集 YYYY-MM-DD 所有比赛`；详见 [采集说明](docs/COLLECTION.md)。真实预测与手机原对话自动回传仍未完成。
+
 本仓库保存 HH520 V2.1-Test 模型资产与 Phase 1–6 工程架构。GPT 是预测执行者，任务管理中心负责持续调度，数据服务器负责采集事实，GitHub 保存模型、Prompt、流程和版本。
 
 **当前交付：可校验的模型资料、项目接管文件、六阶段架构与接口契约。自动采集、GPT 持续执行、手机一句话预测尚未接通。** HH520 V2.1-Test 核心冻结，Upgrade Package 1 = PARKED。

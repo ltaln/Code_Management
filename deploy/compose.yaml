@@ -6,6 +6,8 @@ services:
     environment:
       HH520_GATEWAY_TOKEN: ${HH520_GATEWAY_TOKEN:?Set a private gateway token}
       HH520_DATABASE: /state/tasks.sqlite3
+      FIRECRAWL_ENDPOINT: ${FIRECRAWL_ENDPOINT:-}
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
     ports:
       - "127.0.0.1:8765:8765"
     volumes:
@@ -19,6 +21,10 @@ services:
     command: ["python", "-m", "task_manager.worker"]
     environment:
       HH520_DATABASE: /state/tasks.sqlite3
+      FIRECRAWL_ENDPOINT: ${FIRECRAWL_ENDPOINT:-}
+      FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
+      HH520_MAX_PAGES: ${HH520_MAX_PAGES:-150}
+      HH520_COLLECTION_TIMEOUT: ${HH520_COLLECTION_TIMEOUT:-1800}
     volumes:
       - hh520_state:/state
     restart: unless-stopped

@@ -331,9 +331,15 @@ class Application:
             raise RequestError(400,'INVALID_CONTENT_LENGTH')
         if not 0<n<=max_bytes:
             raise RequestError(413,f'BODY_LIMIT_{max_bytes}_BYTES')
+        raw=env['wsgi.input'].read(n)
         try:
-            value=json.loads(env['wsgi.input'].read(n))
-        except (ValueError,UnicodeError):
+            value=json.loads(raw)
+        except json.JSONDecodeError:
+            try:
+                value=json.loads(raw,strict=False)
+            except (ValueError,UnicodeError):
+                raise RequestError(400,'INVALID_JSON')
+        except UnicodeError:
             raise RequestError(400,'INVALID_JSON')
         if not isinstance(value,dict):
             raise RequestError(400,'JSON_OBJECT_REQUIRED')
@@ -473,7 +479,7 @@ class Application:
     def route(self,method,path,env):
         if method=='GET' and path=='/health':
             readiness=verify(self.root)
-            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.13',
+            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.14',
                        'collection':'configured' if os.environ.get('FIRECRAWL_ENDPOINT') and os.environ.get('FIRECRAWL_API_KEY') else 'not_configured',
                        'delivery':'polling_only_no_chat_push'}
         if method=='POST' and path=='/v1/tasks':

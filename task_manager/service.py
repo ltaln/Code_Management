@@ -334,10 +334,14 @@ class Application:
         raw=env['wsgi.input'].read(n)
         try:
             value=json.loads(raw)
-        except json.JSONDecodeError:
+        except json.JSONDecodeError as strict_error:
             try:
                 value=json.loads(raw,strict=False)
-            except (ValueError,UnicodeError):
+            except (ValueError,UnicodeError) as relaxed_error:
+                print('INVALID_JSON_DIAGNOSTIC '
+                      f'declared={n} read={len(raw)} strict_pos={strict_error.pos} '
+                      f'relaxed={type(relaxed_error).__name__} tail={raw[-24:].hex()}',
+                      file=sys.stderr,flush=True)
                 raise RequestError(400,'INVALID_JSON')
         except UnicodeError:
             raise RequestError(400,'INVALID_JSON')
@@ -479,7 +483,7 @@ class Application:
     def route(self,method,path,env):
         if method=='GET' and path=='/health':
             readiness=verify(self.root)
-            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.14',
+            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.15',
                        'collection':'configured' if os.environ.get('FIRECRAWL_ENDPOINT') and os.environ.get('FIRECRAWL_API_KEY') else 'not_configured',
                        'delivery':'polling_only_no_chat_push'}
         if method=='POST' and path=='/v1/tasks':

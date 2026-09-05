@@ -301,6 +301,13 @@ class Application:
                     raise RequestError(401,'UNAUTHORIZED')
                 status, value = self.route(method,path,env)
         except RequestError as exc:
+            task_match=re.match(r'/v1/tasks/([a-f0-9]{32})',env.get('PATH_INFO',''))
+            if task_match:
+                try:
+                    with self.store.db() as db:
+                        self.store.event(db,task_match.group(1),'REJECTED',exc.message)
+                except sqlite3.Error:
+                    pass
             status,value=exc.code,{'error':exc.message}
         except Exception:
             status,value=500,{'error':'INTERNAL_ERROR'}
@@ -419,7 +426,7 @@ class Application:
     def route(self,method,path,env):
         if method=='GET' and path=='/health':
             readiness=verify(self.root)
-            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.4',
+            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.5',
                        'collection':'configured' if os.environ.get('FIRECRAWL_ENDPOINT') and os.environ.get('FIRECRAWL_API_KEY') else 'not_configured',
                        'delivery':'polling_only_no_chat_push'}
         if method=='POST' and path=='/v1/tasks':

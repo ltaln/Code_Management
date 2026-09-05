@@ -7,7 +7,7 @@ from data_engine.gpt_input import compact_match
 
 
 class GPTInputTests(unittest.TestCase):
-    def test_market_history_is_bounded_and_auditable(self):
+    def test_prediction_uses_only_latest_market_snapshot(self):
         snapshots='\n\n'.join(f'📸 快照 #{i}更新时间: 2099-01-01 00:{i:02d}\n'+('盘口资料 '*800)
                               for i in range(1,10))
         package={'date':'2099-01-01','match_no':1,'code':'20990101001','xi':'1',
@@ -21,9 +21,9 @@ class GPTInputTests(unittest.TestCase):
             result=compact_match(path)
         content=result['sections'][0]['content']
         self.assertLessEqual(len(content),18000)
-        self.assertIn('快照 #1',content)
-        self.assertIn('快照 #5',content)
         self.assertIn('快照 #9',content)
+        self.assertNotIn('快照 #1更新时间',content)
+        self.assertNotIn('快照 #5更新时间',content)
         self.assertRegex(result['package_sha256'],r'^[a-f0-9]{64}$')
 
 

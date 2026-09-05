@@ -31,7 +31,6 @@
   "baseline_rules": [
     "firecrawl_gate",
     "missing_data_recovery",
-    "t_minus_30_freeze",
     "historical_dna_reconstruction",
     "league_dna",
     "team_dna",
@@ -51,5 +50,7 @@
     "first_half",
     "total_goals"
   ],
-  "backtest_data_policy": "PREDICTION_ARCHIVE_FIRST"
+  "backtest_data_policy": "PREDICTION_ARCHIVE_OR_OLD_COLLECTION",
+  "prediction_data_policy": "ALWAYS_FRESH_LATEST_ONLY_NO_REUSE",
+  "t_minus_30": "CANCELLED_BY_USER_2026-09-06"
 }

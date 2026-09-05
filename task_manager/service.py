@@ -3,13 +3,14 @@ from __future__ import annotations
 
 import argparse
 from contextlib import contextmanager
-from datetime import date, datetime, timedelta, timezone
+from datetime import date, datetime, timezone
 import hashlib
 import hmac
 import json
 import os
 from pathlib import Path
 import re
+import shutil
 import sqlite3
 import sys
 import threading
@@ -165,6 +166,48 @@ class Store:
                 self.event(db,task_id,'AWAITING_GPT','采集与审计输入已保存，等待 GPT 按冻结流程逐场分析')
             return bool(updated)
 
+    def prune_prediction_collections(self, current_task_id, current_attempt_id):
+        """Keep only the current prediction collection; collection/backtest data is untouched."""
+        if not all(re.fullmatch(r'[a-f0-9]{32}', value or '') for value in (current_task_id,current_attempt_id)):
+            raise RequestError(500,'INVALID_COLLECTION_RETENTION_ID')
+        root=(self.path.parent/'collections').resolve()
+        root.mkdir(parents=True,exist_ok=True)
+        with self.db() as db:
+            prediction_ids=[]
+            for row in db.execute('SELECT id,payload FROM tasks'):
+                try:
+                    if json.loads(row['payload']).get('mode')=='prediction' and row['id']!=current_task_id:
+                        prediction_ids.append(row['id'])
+                except (TypeError,ValueError):
+                    continue
+        removed=0
+        for task_id in prediction_ids:
+            candidate=(root/task_id).resolve()
+            if candidate.parent==root and candidate.is_dir():
+                shutil.rmtree(candidate)
+                removed+=1
+        current_root=(root/current_task_id).resolve()
+        if current_root.parent==root and current_root.is_dir():
+            for attempt in current_root.iterdir():
+                if attempt.name!=current_attempt_id and attempt.is_dir() and attempt.resolve().parent==current_root:
+                    shutil.rmtree(attempt)
+                    removed+=1
+        now=time.time()
+        with self.db() as db:
+            db.execute('BEGIN IMMEDIATE')
+            for task_id in prediction_ids:
+                row=db.execute('SELECT status FROM tasks WHERE id=?',(task_id,)).fetchone()
+                if not row:
+                    continue
+                if row['status']=='AWAITING_GPT':
+                    db.execute("UPDATE tasks SET status='BLOCKED',input_ref=NULL,blockers=?,updated=? WHERE id=?",
+                               (json.dumps(['PREDICTION_COLLECTION_SUPERSEDED']),now,task_id))
+                    self.event(db,task_id,'BLOCKED','旧预测采集已由更新的预测采集替代并删除')
+                else:
+                    db.execute('UPDATE tasks SET input_ref=NULL,updated=? WHERE id=?',(now,task_id))
+            self.event(db,current_task_id,'COLLECTING',f'预测采集保留策略已执行；删除旧目录 {removed} 个')
+        return removed
+
     def save_match_prediction(self, task_id, match_no, code, payload):
         encoded=json.dumps(payload,ensure_ascii=False,sort_keys=True,separators=(',',':'))
         content_hash=hashlib.sha256(encoded.encode('utf-8')).hexdigest()
@@ -233,9 +276,6 @@ class Worker:
             blockers = list(check['errors'])
             if digest(self.root/'versions/asset_lock.json') != row['asset_hash']:
                 blockers.append('ASSETS_CHANGED_SINCE_TASK_CREATED')
-            today=datetime.now(timezone(timedelta(hours=8))).date().isoformat()
-            if payload['mode']=='prediction' and payload['date'] <= today:
-                blockers.append('PREDICTION_REQUIRES_FUTURE_FIXTURE_DATE_FOR_T_MINUS_30_SAFETY')
             if payload['mode'] in ('collection','prediction') and not blockers:
                 from data_engine.collector import FirecrawlCollector, CollectionError, collection_report
                 collector=self.collector or FirecrawlCollector(self.store.path.parent/'collections')
@@ -244,6 +284,10 @@ class Worker:
                 try:
                     result=collector.collect(row['id'],payload['date'],
                         lambda: not self.stop.is_set() and self.store.renew(row['id'],token),token)
+                    if payload['mode']=='prediction':
+                        result.update(collection_policy='FRESH_PER_PREDICTION',fresh_for_task_id=row['id'],
+                                      reused_collection=False)
+                        self.store.prune_prediction_collections(row['id'],token)
                     report=collection_report(result)
                     if payload['mode']=='prediction' and result['collection_complete'] and result['prediction_eligible']:
                         if not self.store.handoff(row['id'],token,result,report):
@@ -264,8 +308,8 @@ class Worker:
                 status = 'BLOCKED'
                 report = '# 任务未进入预测\n\n' + '\n'.join('- '+x for x in sorted(set(blockers)))
                 report += '\n\n已读取重要注意事项对应资产并校验冻结文件；未采集新数据，未调用模型，未生成比分。'
-                if payload.get('date') and payload['date'] < datetime.now(timezone.utc).date().isoformat():
-                    report += '\n\n请求涉及过去日期：必须使用当时可用的赛前资料；历史重建遵守 T-30，禁止使用赛后数据。'
+                if payload['mode']=='backtest':
+                    report += '\n\n回测允许读取服务器已有采集数据；当前回测执行服务尚未启用。'
             self.store.finish(row['id'],token,status,report,sorted(set(blockers)))
         except Exception:
             # Avoid leaking provider credentials or local paths in future adapter errors.
@@ -380,6 +424,13 @@ class Application:
         ref=task.get('input_ref')
         if not ref:
             raise RequestError(409,'COLLECTION_INPUT_NOT_READY')
+        mode=task['payload']['mode']
+        if mode=='prediction':
+            if (ref.get('collection_policy')!='FRESH_PER_PREDICTION'
+                    or ref.get('fresh_for_task_id')!=task_id or ref.get('reused_collection') is not False):
+                raise RequestError(409,'PREDICTION_REQUIRES_FRESH_TASK_COLLECTION')
+        elif mode!='backtest':
+            raise RequestError(403,'OLD_COLLECTION_ACCESS_RESTRICTED_TO_BACKTEST')
         attempt=ref.get('attempt_id','')
         if not re.fullmatch(r'[a-f0-9]{32}',attempt):
             raise RequestError(500,'INVALID_STORED_INPUT_REFERENCE')
@@ -513,7 +564,7 @@ class Application:
     def route(self,method,path,env):
         if method=='GET' and path=='/health':
             readiness=verify(self.root)
-            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.18',
+            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.19',
                        'collection':'configured' if os.environ.get('FIRECRAWL_ENDPOINT') and os.environ.get('FIRECRAWL_API_KEY') else 'not_configured',
                        'delivery':'polling_only_no_chat_push'}
         if method=='POST' and path=='/v1/tasks':

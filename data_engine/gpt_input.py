@@ -34,22 +34,17 @@ def _bounded(text: str, limit: int) -> tuple[str, bool]:
 
 
 def _market_snapshots(text: str, limit: int) -> tuple[str, bool]:
-    """Keep latest, middle and earliest market snapshots instead of every duplicate."""
+    """Expose only the most recent market snapshot to prediction analysis."""
     text = _clean(text)
     markers = list(re.finditer(r'(?m)^📸 快照 #\d+更新时间:', text))
-    if len(markers) <= 3:
+    if not markers:
         return _bounded(text, limit)
     header = text[:markers[0].start()]
-    chunks = []
-    for i, marker in enumerate(markers):
-        end = markers[i + 1].start() if i + 1 < len(markers) else len(text)
-        chunks.append(text[marker.start():end])
-    selected = [chunks[0], chunks[len(chunks) // 2], chunks[-1]]
-    per = max((limit - len(header) - 160) // 3, 1_000)
-    selected = [_bounded(chunk, per)[0] for chunk in selected]
-    compact = header + '\n\n[盘口时间序列共 %d 份；保留最新、中间、最早快照]\n\n' % len(chunks)
-    compact += '\n\n'.join(selected)
-    return compact[:limit], True
+    latest=text[markers[-1].start():]
+    compact=header+'\n\n[盘口时间序列共 %d 份；预测仅使用最近一次快照]\n\n' % len(markers)
+    compact+=latest
+    bounded,truncated=_bounded(compact,limit)
+    return bounded,truncated or len(markers)>1
 
 
 def compact_match(path: Path) -> dict:
@@ -66,7 +61,7 @@ def compact_match(path: Path) -> dict:
         'package_version': package['package_version'],
         'complete': package['complete'],
         'package_sha256': hashlib.sha256(raw).hexdigest(),
-        'compression_policy': 'latest_middle_earliest_market_snapshots_v1',
+        'compression_policy': 'latest_market_snapshot_only_v2',
         'sections': [],
     }
     entries = list(package.get('sections', [])) + list(package.get('shared_context', []))
@@ -108,7 +103,10 @@ def compact_match_batch(paths: list[Path]) -> dict:
             category=entry.get('category')
             if category not in MAX_SECTION_CHARS:
                 continue
-            content,truncated=_bounded(entry.get('markdown',''),min(MAX_SECTION_CHARS[category],6000))
+            if category=='asian_handicap_changes':
+                content,truncated=_market_snapshots(entry.get('markdown',''),min(MAX_SECTION_CHARS[category],6000))
+            else:
+                content,truncated=_bounded(entry.get('markdown',''),min(MAX_SECTION_CHARS[category],6000))
             item['sections'].append({'category':category,'source_url':entry.get('url'),
                                      'content':content,'compressed':truncated})
         matches.append(item)
@@ -121,5 +119,5 @@ def compact_match_batch(paths: list[Path]) -> dict:
                 content,truncated=_bounded(entry.get('markdown',''),MAX_SECTION_CHARS[category])
                 shared.append({'category':category,'source_url':entry.get('url'),
                                'content':content,'compressed':truncated})
-    return {'compression_policy':'per_match_6000_shared_once_v1','matches':matches,
+    return {'compression_policy':'latest_market_snapshot_per_match_6000_shared_once_v2','matches':matches,
             'shared_context':shared}

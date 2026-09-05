@@ -1,8 +1,11 @@
 {
   "contract_version": "0.1.0",
-  "implementation_status": "DESIGN_ONLY",
+  "implementation_status": "LIVE",
   "default_scope": "ALL",
   "new_request_requires_new_snapshot": true,
+  "prediction_may_reuse_snapshot": false,
+  "prediction_snapshot_retention_count": 1,
+  "old_snapshot_reader": "backtest_only",
   "resume_requires_same_snapshot_and_assets": true,
   "retry_policy": {
     "max_attempts": 3,

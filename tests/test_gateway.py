@@ -42,14 +42,24 @@ class GatewayTests(unittest.TestCase):
             self.create('预测 2026-08-11 所有比赛')
         self.assertEqual(err.exception.code,409)
 
-    def test_persistence_and_blocked_prediction(self):
+    def test_prediction_collects_fresh_without_t30_date_gate(self):
         task=self.create('预测 2026-08-11 所有比赛')
         reopened=Store(self.path)
-        Worker(reopened).once()
+        calls=[]
+        class FakeCollector:
+            def collect(inner,task_id,target_date,pulse,attempt_id):
+                calls.append((task_id,target_date,attempt_id))
+                return {'task_id':task_id,'attempt_id':attempt_id,'date':target_date,
+                        'snapshot_id':'fresh-snapshot','package_index':'index.json','package_dir':'packages',
+                        'collection_complete':True,'prediction_eligible':True,'scraped_pages':1,'failed_pages':0,
+                        'match_count':1,'complete_matches':1,'truncated':False,'unassigned_count':0,
+                        'receipt_sha256':'a'*64}
+        Worker(reopened,collector=FakeCollector()).once()
         row=reopened.get(task)
-        self.assertEqual(row['status'],'BLOCKED')
-        self.assertIn('未生成比分',row['report'])
-        self.assertIn('PREDICTION_REQUIRES_FUTURE_FIXTURE_DATE_FOR_T_MINUS_30_SAFETY',row['blockers'])
+        self.assertEqual(row['status'],'AWAITING_GPT')
+        self.assertEqual(len(calls),1)
+        self.assertEqual(row['input_ref']['fresh_for_task_id'],task)
+        self.assertFalse(row['input_ref']['reused_collection'])
 
     def test_external_gpt_handoff_and_immutable_commit(self):
         task=self.create('预测 2099-08-11 所有比赛','future-prediction')
@@ -142,7 +152,8 @@ class GatewayTests(unittest.TestCase):
         index_path=package_dir/'index.json'
         (base/index_path).write_text(json.dumps({'matches':matches}),encoding='utf-8')
         ref={'attempt_id':token,'package_index':index_path.as_posix(),'package_dir':package_dir.as_posix(),
-             'snapshot_id':'chunk-snapshot'}
+             'snapshot_id':'chunk-snapshot','collection_policy':'FRESH_PER_PREDICTION',
+             'fresh_for_task_id':task,'reused_collection':False}
         self.assertTrue(self.store.handoff(task,token,ref,'ready'))
         def payload(number):
             return {'match_no':number,'code':f'20990811{number:03d}',
@@ -177,7 +188,9 @@ class GatewayTests(unittest.TestCase):
         index_path=package_dir/'index.json'
         (base/index_path).write_text(json.dumps({'matches':matches}),encoding='utf-8')
         self.store.handoff(task,token,{'attempt_id':token,'package_index':index_path.as_posix(),
-                           'package_dir':package_dir.as_posix(),'snapshot_id':'min-snapshot'},'ready')
+                           'package_dir':package_dir.as_posix(),'snapshot_id':'min-snapshot',
+                           'collection_policy':'FRESH_PER_PREDICTION','fresh_for_task_id':task,
+                           'reused_collection':False},'ready')
         def submit(number):
             code=f'20990811{number:03d}'
             body={'p':[{'n':number,'c':code,'m':'C'*13,'e':['mixed_data'],
@@ -242,7 +255,7 @@ class GatewayTests(unittest.TestCase):
         bodies=self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/openapi.json'},
                         lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('200'))
-        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.18')
+        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.19')
         self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/v1/tasks/'+'a'*32},
                  lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('401'))

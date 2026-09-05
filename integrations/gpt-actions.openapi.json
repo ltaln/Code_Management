@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "HH520 private prediction gateway",
-    "version": "0.4.9",
+    "version": "0.4.10",
     "description": "Collects future pre-match data, hands bounded match packages to GPT, and stores immutable HH520 prediction commits."
   },
   "servers": [
@@ -877,7 +877,7 @@
     "/v1/tasks/{task_id}/analysis-compact": {
       "post": {
         "operationId": "saveHH520CompactBatch",
-        "summary": "Submit all match analyses in a compact form; the server expands the 13 modules, validates every match, saves immutably, finalizes, and returns the Prediction Commit.",
+        "summary": "Save the next 1-to-3-match compact chunk. Continue with remaining_match_nos in the same turn; the final chunk returns the immutable Prediction Commit.",
         "parameters": [
           {
             "name": "task_id",
@@ -903,7 +903,7 @@
                   "predictions": {
                     "type": "array",
                     "minItems": 1,
-                    "maxItems": 999,
+                    "maxItems": 3,
                     "items": {
                       "$ref": "#/components/schemas/CompactMatchPrediction"
                     }
@@ -916,6 +916,16 @@
         "responses": {
           "200": {
             "description": "Compact batch result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Chunk saved; submit remaining matches in the same turn",
             "content": {
               "application/json": {
                 "schema": {

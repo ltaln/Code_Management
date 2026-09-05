@@ -140,7 +140,7 @@ def main():
     queue=deque(); queued=set()
     for u in load_seed_urls(a.urls,a.date): queue.append((u,classify_supported_url(u,a.date) or "seed","seed")); queued.add(u)
     docs=[]; vals=[]; discoveries=[]; processed=set(); failures=[]
-    concurrency=min(max(int(os.environ.get("HH520_COLLECT_CONCURRENCY","8")),1),16)
+    concurrency=min(max(int(os.environ.get("HH520_COLLECT_CONCURRENCY","16")),1),16)
     with ThreadPoolExecutor(max_workers=concurrency) as executor:
         while queue and len(processed)<a.max_pages:
             batch=[]

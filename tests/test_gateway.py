@@ -118,6 +118,42 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(row['status'],'COMPLETED')
         self.assertIn('这不是比赛预测',row['report'])
 
+    def test_compact_chunks_finalize_on_last_chunk(self):
+        task=self.create('预测 2099-08-11 所有比赛','compact-chunks')
+        _,token=self.store.claim()
+        self.store.renew(task,token,'COLLECTING')
+        base=self.path.parent/'collections'/task/token
+        package_dir=Path('data/matches/2099-08-11/chunk_test')
+        (base/package_dir).mkdir(parents=True)
+        matches=[]
+        for number in range(1,5):
+            code=f'20990811{number:03d}'
+            file=f'match_{number:03d}_{code}.json'
+            (base/package_dir/file).write_text('{}',encoding='utf-8')
+            matches.append({'match_no':number,'code':code,'xi':str(number),'file':file,'complete':True})
+        index_path=package_dir/'index.json'
+        (base/index_path).write_text(json.dumps({'matches':matches}),encoding='utf-8')
+        ref={'attempt_id':token,'package_index':index_path.as_posix(),'package_dir':package_dir.as_posix(),
+             'snapshot_id':'chunk-snapshot'}
+        self.assertTrue(self.store.handoff(task,token,ref,'ready'))
+        def payload(number):
+            return {'match_no':number,'code':f'20990811{number:03d}','module_statuses':['COMPLETED']*13,
+                    'module_summaries':['已按冻结流程执行']*13,'evidence_refs':[['mixed_data']]*13,
+                    'results':{'correct_score_top3':[],'htft_top3':[],'asian_handicap':'PASS',
+                    'over_under':'PASS','one_x_two':'PASS','total_goals':'PASS','confidence':'低'},
+                    'warnings':[],'prediction_reason':'数据有限，保守输出。'}
+        def submit(numbers):
+            encoded=json.dumps({'predictions':[payload(n) for n in numbers]},ensure_ascii=False).encode()
+            env={'CONTENT_TYPE':'application/json','CONTENT_LENGTH':str(len(encoded)),'wsgi.input':io.BytesIO(encoded)}
+            return self.app.route('POST',f'/v1/tasks/{task}/analysis-compact',env)
+        status,partial=submit([1,2,3])
+        self.assertEqual(status,202)
+        self.assertEqual(partial['remaining_match_nos'],[4])
+        status,final=submit([4])
+        self.assertEqual(status,200)
+        self.assertTrue(final['is_prediction'])
+        self.assertEqual(self.store.get(task)['status'],'COMPLETED')
+
     def test_transient_task_tells_gpt_to_continue(self):
         task=self.create()
         progress=self.app.task_progress(task,wait_seconds=0)
@@ -155,7 +191,7 @@ class GatewayTests(unittest.TestCase):
         bodies=self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/openapi.json'},
                         lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('200'))
-        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.9')
+        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.10')
         self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/v1/tasks/'+'a'*32},
                  lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('401'))

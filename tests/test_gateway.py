@@ -81,9 +81,9 @@ class GatewayTests(unittest.TestCase):
         status,batch=self.app.route('GET',f'/v1/tasks/{task}/analysis-batch',{})
         self.assertEqual(status,200)
         self.assertEqual(len(batch['matches']),1)
-        payload={'match_no':1,'code':'20990811001','module_statuses':['COMPLETED']*13,
-                 'module_summaries':['已按冻结流程执行']*13,'evidence_refs':[['mixed_data']]*13,
-                 'results':{'correct_score_top3':[],'htft_top3':[],
+        payload={'match_no':1,'code':'20990811001','module_trace':'|'.join(['COMPLETED:已按冻结流程执行']*13),
+                 'evidence_refs':['mixed_data'],
+                 'results':{'correct_score_top3':'PASS','htft_top3':'PASS',
                  'asian_handicap':'PASS','over_under':'PASS','one_x_two':'PASS','total_goals':'PASS','confidence':'低'},
                  'warnings':[],'prediction_reason':'数据有限，保守输出。'}
         single=json.dumps(payload,ensure_ascii=False).encode('utf-8')
@@ -137,9 +137,9 @@ class GatewayTests(unittest.TestCase):
              'snapshot_id':'chunk-snapshot'}
         self.assertTrue(self.store.handoff(task,token,ref,'ready'))
         def payload(number):
-            return {'match_no':number,'code':f'20990811{number:03d}','module_statuses':['COMPLETED']*13,
-                    'module_summaries':['已按冻结流程执行']*13,'evidence_refs':[['mixed_data']]*13,
-                    'results':{'correct_score_top3':[],'htft_top3':[],'asian_handicap':'PASS',
+            return {'match_no':number,'code':f'20990811{number:03d}',
+                    'module_trace':'|'.join(['COMPLETED:已按冻结流程执行']*13),'evidence_refs':['mixed_data'],
+                    'results':{'correct_score_top3':'PASS','htft_top3':'PASS','asian_handicap':'PASS',
                     'over_under':'PASS','one_x_two':'PASS','total_goals':'PASS','confidence':'低'},
                     'warnings':[],'prediction_reason':'数据有限，保守输出。'}
         def submit(numbers):
@@ -190,7 +190,7 @@ class GatewayTests(unittest.TestCase):
         bodies=self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/openapi.json'},
                         lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('200'))
-        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.11')
+        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.12')
         self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/v1/tasks/'+'a'*32},
                  lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('401'))

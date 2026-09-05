@@ -397,18 +397,19 @@ class Application:
 
     @classmethod
     def expand_compact_result(cls, body, expected):
-        required={'match_no','code','module_statuses','module_summaries','evidence_refs',
-                  'results','warnings','prediction_reason'}
+        required={'match_no','code','module_trace','evidence_refs','results','warnings','prediction_reason'}
         if set(body)!=required or body.get('match_no')!=expected['match_no'] or body.get('code')!=expected['code']:
             raise RequestError(400,'COMPACT_RESULT_FIELDS_INVALID')
-        statuses,summaries,refs=body['module_statuses'],body['module_summaries'],body['evidence_refs']
-        if not all(isinstance(x,list) and len(x)==len(cls.MODULE_IDS) for x in (statuses,summaries,refs)):
-            raise RequestError(400,'COMPACT_MODULE_ARRAYS_MUST_HAVE_13_ITEMS')
-        if not all(x in ('COMPLETED','DEGRADED') for x in statuses):
-            raise RequestError(400,'COMPACT_MODULE_STATUS_INVALID')
-        if not all(isinstance(x,str) and 1<=len(x)<=800 for x in summaries):
-            raise RequestError(400,'COMPACT_MODULE_SUMMARY_INVALID')
-        if not all(isinstance(x,list) and x and all(isinstance(v,str) and v for v in x) for x in refs):
+        if not isinstance(body['module_trace'],str):
+            raise RequestError(400,'COMPACT_MODULE_TRACE_INVALID')
+        trace=[x.strip() for x in body['module_trace'].split('|')]
+        parsed=[re.fullmatch(r'(COMPLETED|DEGRADED):(.{1,300})',x) for x in trace]
+        if len(trace)!=len(cls.MODULE_IDS) or not all(parsed):
+            raise RequestError(400,'COMPACT_MODULE_TRACE_MUST_HAVE_13_ORDERED_SEGMENTS')
+        statuses=[x.group(1) for x in parsed]
+        summaries=[x.group(2).strip() for x in parsed]
+        refs=body['evidence_refs']
+        if not isinstance(refs,list) or not refs or not all(isinstance(x,str) and x for x in refs):
             raise RequestError(400,'COMPACT_EVIDENCE_REFS_INVALID')
         if not isinstance(body['warnings'],list) or not all(isinstance(x,str) for x in body['warnings']):
             raise RequestError(400,'COMPACT_WARNINGS_INVALID')
@@ -418,16 +419,16 @@ class Application:
         if not isinstance(results,dict):
             raise RequestError(400,'COMPACT_RESULTS_INVALID')
         for key in ('correct_score_top3','htft_top3','asian_handicap','over_under','one_x_two','total_goals','confidence'):
-            if key not in results:
+            if not isinstance(results.get(key),str) or not results[key].strip():
                 raise RequestError(400,'RESULTS_MISSING_'+key.upper())
         modules=[{'module_id':module_id,'status':statuses[i],'summary':summaries[i],
-                  'evidence_refs':refs[i]} for i,module_id in enumerate(cls.MODULE_IDS)]
+                  'evidence_refs':refs} for i,module_id in enumerate(cls.MODULE_IDS)]
         lines=[f"## 第 {body['match_no']} 场 · {body['code']}","","### 完整冻结流程"]
         lines += [f"- {m['module_id']} [{m['status']}]：{m['summary']}（证据：{', '.join(m['evidence_refs'])}）"
                   for m in modules]
         lines += ['', '### 预测结果',
-                  '- 精准比分 Top3：'+json.dumps(results['correct_score_top3'],ensure_ascii=False),
-                  '- 半全场 Top3：'+json.dumps(results['htft_top3'],ensure_ascii=False),
+                  '- 精准比分 Top3：'+results['correct_score_top3'],
+                  '- 半全场 Top3：'+results['htft_top3'],
                   f"- 亚洲盘：{results['asian_handicap']}",f"- 大小球：{results['over_under']}",
                   f"- 胜平负：{results['one_x_two']}",f"- 总进球：{results['total_goals']}",
                   f"- 置信度：{results['confidence']}",f"- Prediction Reason：{body['prediction_reason']}"]
@@ -472,7 +473,7 @@ class Application:
     def route(self,method,path,env):
         if method=='GET' and path=='/health':
             readiness=verify(self.root)
-            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.11',
+            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.12',
                        'collection':'configured' if os.environ.get('FIRECRAWL_ENDPOINT') and os.environ.get('FIRECRAWL_API_KEY') else 'not_configured',
                        'delivery':'polling_only_no_chat_push'}
         if method=='POST' and path=='/v1/tasks':

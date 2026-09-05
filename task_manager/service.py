@@ -458,6 +458,25 @@ class Application:
         return {'match_no':body['match_no'],'code':body['code'],'report_markdown':'\n'.join(lines),
                 'modules':modules,'results':results,'warnings':body['warnings']}
 
+    @classmethod
+    def expand_min_result(cls, body, expected):
+        if set(body)!={'n','c','m','e','r','w','p'} or body.get('n')!=expected['match_no'] or body.get('c')!=expected['code']:
+            raise RequestError(400,'MIN_RESULT_FIELDS_INVALID')
+        module_codes=body['m']
+        values=body['r']
+        if not isinstance(module_codes,str) or len(module_codes)!=len(cls.MODULE_IDS) or set(module_codes)-{'C','D'}:
+            raise RequestError(400,'MIN_MODULE_CODES_INVALID')
+        if not isinstance(values,list) or len(values)!=7 or not all(isinstance(x,str) and x.strip() for x in values):
+            raise RequestError(400,'MIN_RESULTS_INVALID')
+        trace='|'.join(
+            f"{'COMPLETED' if code=='C' else 'DEGRADED'}:{module_id}已按冻结规则执行"
+            for code,module_id in zip(module_codes,cls.MODULE_IDS))
+        return cls.expand_compact_result({
+            'match_no':body['n'],'code':body['c'],'module_trace':trace,'evidence_refs':body['e'],
+            'results':dict(zip(('correct_score_top3','htft_top3','asian_handicap','over_under',
+                                'one_x_two','total_goals','confidence'),values)),
+            'warnings':body['w'],'prediction_reason':body['p']},expected)
+
     def finalize_prediction(self, task_id):
         task,_,index=self.input_index(task_id)
         expected=index.get('matches',[])
@@ -494,7 +513,7 @@ class Application:
     def route(self,method,path,env):
         if method=='GET' and path=='/health':
             readiness=verify(self.root)
-            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.16',
+            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.17',
                        'collection':'configured' if os.environ.get('FIRECRAWL_ENDPOINT') and os.environ.get('FIRECRAWL_API_KEY') else 'not_configured',
                        'delivery':'polling_only_no_chat_push'}
         if method=='POST' and path=='/v1/tasks':
@@ -623,6 +642,34 @@ class Application:
                 content_hash,created=self.store.save_match_prediction(
                     task_id,item['match_no'],item['code'],result)
                 hashes.append({'match_no':item['match_no'],'content_sha256':content_hash,'created':created})
+            commit,_=self.finalize_prediction(task_id)
+            return 200,{'task_id':task_id,'status':'COMPLETED','is_prediction':True,
+                        'saved_matches':hashes,'prediction_commit':commit,
+                        'report_url':f'/v1/tasks/{task_id}/report'}
+        min_submit=re.fullmatch(r'/v1/tasks/([a-f0-9]{32})/analysis-min',path)
+        if min_submit and method=='POST':
+            task_id=min_submit.group(1)
+            task,_,index=self.input_index(task_id)
+            body=self.body(env,65536)
+            if set(body)!={'p'} or not isinstance(body['p'],list) or not 1<=len(body['p'])<=999:
+                raise RequestError(400,'REQUIRED: p for every remaining match')
+            expected=index.get('matches',[])
+            expected_by_number={x['match_no']:x for x in expected}
+            supplied={x.get('n'):x for x in body['p'] if isinstance(x,dict)}
+            saved={x['match_no'] for x in self.store.predictions(task_id)}
+            required=set(expected_by_number) if task['status']=='COMPLETED' else set(expected_by_number)-saved
+            if len(supplied)!=len(body['p']) or set(supplied)!=required:
+                raise RequestError(400,'MIN_BATCH_MUST_CONTAIN_EVERY_REMAINING_MATCH_ONCE')
+            if task['status']=='COMPLETED' and task.get('prediction_commit'):
+                return 200,{'task_id':task_id,'status':'COMPLETED','is_prediction':True,
+                            'saved_matches':[],'prediction_commit':task['prediction_commit'],
+                            'report_url':f'/v1/tasks/{task_id}/report'}
+            expanded=[self.expand_min_result(supplied[number],expected_by_number[number]) for number in sorted(supplied)]
+            hashes=[]
+            for result in expanded:
+                content_hash,created=self.store.save_match_prediction(
+                    task_id,result['match_no'],result['code'],result)
+                hashes.append({'match_no':result['match_no'],'content_sha256':content_hash,'created':created})
             commit,_=self.finalize_prediction(task_id)
             return 200,{'task_id':task_id,'status':'COMPLETED','is_prediction':True,
                         'saved_matches':hashes,'prediction_commit':commit,

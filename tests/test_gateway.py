@@ -112,6 +112,15 @@ class GatewayTests(unittest.TestCase):
         status,retry=self.app.route('POST',f'/v1/tasks/{task}/analysis-compact',env)
         self.assertEqual(retry['prediction_commit'],final['prediction_commit'])
 
+        minimal={'p':[{'n':1,'c':'20990811001','m':'C'*13,'e':['mixed_data'],
+                       'r':['PASS','PASS','PASS','PASS','PASS','PASS','低'],
+                       'w':[],'p':'数据有限，保守输出。'}]}
+        encoded=json.dumps(minimal,ensure_ascii=False).encode()
+        env={'CONTENT_TYPE':'application/json','CONTENT_LENGTH':str(len(encoded)),'wsgi.input':io.BytesIO(encoded)}
+        status,min_final=self.app.route('POST',f'/v1/tasks/{task}/analysis-min',env)
+        self.assertEqual(status,200)
+        self.assertTrue(min_final['is_prediction'])
+
     def test_probe_is_not_prediction(self):
         task=self.create()
         self.worker.once()
@@ -204,7 +213,7 @@ class GatewayTests(unittest.TestCase):
         bodies=self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/openapi.json'},
                         lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('200'))
-        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.16')
+        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.17')
         self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/v1/tasks/'+'a'*32},
                  lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('401'))

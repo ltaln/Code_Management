@@ -4,7 +4,7 @@
 
 私人 GPT：<https://chatgpt.com/g/g-6a9b59f4ba4c8191ae091b40ae095160-hh520-football-ai>
 
-运行镜像：`hh520-gateway:0.4.12`。
+运行镜像：`hh520-gateway:0.4.13`。
 
 ## 部署结构
 
@@ -21,7 +21,7 @@
 |---|---|
 |公网 TLS|通过，未跳过证书验证|
 |未认证任务接口|401 UNAUTHORIZED|
-|OpenAPI|0.4.12，12 个路径、13 个操作，ChatGPT 解析无错误|
+|OpenAPI|0.4.13，12 个路径、13 个操作，ChatGPT 解析无错误|
 |私人 GPT|“只有我”；Actions Bearer 已保存|
 |GPT“检查连接”|COMPLETED；任务、后台检查、报告返回成功；明确不是预测|
 |真实整日采集|78 页、0 失败、14/14 场、98 文件 Hash 通过|

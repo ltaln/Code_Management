@@ -31,7 +31,7 @@ class RequestError(Exception):
 def parse_command(command):
     if not isinstance(command, str) or len(command) > 200:
         raise RequestError(400, 'INVALID_COMMAND')
-    command = ' '.join(command.strip().split())
+    command = ' '.join(command.strip().split()).rstrip('。；;')
     if command == '检查连接':
         return {'mode': 'connection_check', 'date': None, 'scope': 'NONE'}
     match = re.fullmatch(r'(预测|回测|采集)\s+(\d{4}-\d{2}-\d{2})\s+(全部比赛|所有比赛)', command)
@@ -473,7 +473,7 @@ class Application:
     def route(self,method,path,env):
         if method=='GET' and path=='/health':
             readiness=verify(self.root)
-            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.12',
+            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.13',
                        'collection':'configured' if os.environ.get('FIRECRAWL_ENDPOINT') and os.environ.get('FIRECRAWL_API_KEY') else 'not_configured',
                        'delivery':'polling_only_no_chat_push'}
         if method=='POST' and path=='/v1/tasks':

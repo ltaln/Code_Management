@@ -31,6 +31,7 @@ class GatewayTests(unittest.TestCase):
 
     def test_command_dates(self):
         self.assertEqual(parse_command('预测 2026-08-11 所有比赛')['mode'],'prediction')
+        self.assertEqual(parse_command('预测 2026-08-11 所有比赛;')['mode'],'prediction')
         for command in ['预测 2026-99-99 所有比赛','预测 今天 全部比赛','rm -rf /']:
             with self.assertRaises(RequestError): parse_command(command)
 
@@ -190,7 +191,7 @@ class GatewayTests(unittest.TestCase):
         bodies=self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/openapi.json'},
                         lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('200'))
-        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.12')
+        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.13')
         self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/v1/tasks/'+'a'*32},
                  lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('401'))

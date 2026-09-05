@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "HH520 private prediction gateway",
-    "version": "0.4.12",
+    "version": "0.4.13",
     "description": "Collects future pre-match data, hands bounded match packages to GPT, and stores immutable HH520 prediction commits."
   },
   "servers": [
@@ -464,7 +464,7 @@
                   },
                   "command": {
                     "type": "string",
-                    "description": "预测 YYYY-MM-DD 所有比赛; 回测 YYYY-MM-DD 所有比赛; 采集 YYYY-MM-DD 所有比赛; 检查连接"
+                    "description": "Pass the user command unchanged. Supported examples: 预测 YYYY-MM-DD 所有比赛 / 回测 YYYY-MM-DD 所有比赛 / 采集 YYYY-MM-DD 所有比赛 / 检查连接"
                   }
                 }
               }

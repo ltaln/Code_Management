@@ -37,7 +37,7 @@ class LinkParser(HTMLParser):
 
 def canonicalize_url(url):
     p=urlparse(url)
-    return urlunparse((p.scheme,p.netloc,p.path,p.params,p.query,""))
+    return urlunparse((p.scheme.lower(),p.netloc.lower(),p.path,p.params,p.query,""))
 
 def slugify(url):
     p=urlparse(url); raw=f"{p.netloc}{p.path}_{p.query}".strip("_")
@@ -87,7 +87,7 @@ def validate_source(url,source,firecrawl):
 def load_seed_urls(cli,target_date):
     seeds=list(cli or [])
     if not cli and Path("urls.txt").exists(): seeds += [x.strip() for x in Path("urls.txt").read_text(encoding="utf-8").splitlines() if x.strip() and not x.startswith("#")]
-    compact=target_date.replace("-",""); seeds += [BASE_URL,f"{BASE_URL}?date={compact}",f"{BASE_URL}tx/10012.php?date={target_date}",f"{BASE_URL}tx/7.php"]
+    compact=target_date.replace("-",""); seeds += [f"{BASE_URL}?date={compact}",f"{BASE_URL}tx/10012.php?date={target_date}",f"{BASE_URL}tx/7.php"]
     return list(dict.fromkeys(canonicalize_url(x) for x in seeds))
 
 def extract_links(html,base):

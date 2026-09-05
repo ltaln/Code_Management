@@ -292,11 +292,14 @@ class Application:
 
     def __call__(self, env, start):
         try:
-            supplied = env.get('HTTP_AUTHORIZATION','')
-            if not hmac.compare_digest(supplied.encode(),('Bearer '+self.token).encode()):
-                raise RequestError(401,'UNAUTHORIZED')
             method, path = env['REQUEST_METHOD'], env.get('PATH_INFO','')
-            status, value = self.route(method,path,env)
+            if method=='GET' and path=='/openapi.json':
+                status,value=200,json.loads((self.root/'integrations/gpt-actions.openapi.json').read_text(encoding='utf-8'))
+            else:
+                supplied = env.get('HTTP_AUTHORIZATION','')
+                if not hmac.compare_digest(supplied.encode(),('Bearer '+self.token).encode()):
+                    raise RequestError(401,'UNAUTHORIZED')
+                status, value = self.route(method,path,env)
         except RequestError as exc:
             status,value=exc.code,{'error':exc.message}
         except Exception:

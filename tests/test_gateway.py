@@ -127,6 +127,16 @@ class GatewayTests(unittest.TestCase):
         self.app(env,lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('400'))
 
+    def test_openapi_schema_is_public_but_tasks_are_private(self):
+        statuses=[]
+        bodies=self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/openapi.json'},
+                        lambda status,headers:statuses.append(status))
+        self.assertTrue(statuses[-1].startswith('200'))
+        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.0')
+        self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/v1/tasks/'+'a'*32},
+                 lambda status,headers:statuses.append(status))
+        self.assertTrue(statuses[-1].startswith('401'))
+
     def test_real_http_roundtrip(self):
         with make_server('127.0.0.1',0,self.app) as server:
             thread=threading.Thread(target=server.serve_forever,daemon=True)

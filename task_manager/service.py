@@ -331,7 +331,18 @@ class Application:
             raise RequestError(400,'INVALID_CONTENT_LENGTH')
         if not 0<n<=max_bytes:
             raise RequestError(413,f'BODY_LIMIT_{max_bytes}_BYTES')
-        raw=env['wsgi.input'].read(n)
+        stream=env['wsgi.input']
+        chunks=[]
+        remaining=n
+        while remaining:
+            chunk=stream.read(remaining)
+            if not chunk:
+                break
+            chunks.append(chunk)
+            remaining-=len(chunk)
+        raw=b''.join(chunks)
+        if len(raw)!=n:
+            raise RequestError(400,'INCOMPLETE_REQUEST_BODY')
         try:
             value=json.loads(raw)
         except json.JSONDecodeError as strict_error:
@@ -483,7 +494,7 @@ class Application:
     def route(self,method,path,env):
         if method=='GET' and path=='/health':
             readiness=verify(self.root)
-            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.15',
+            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.16',
                        'collection':'configured' if os.environ.get('FIRECRAWL_ENDPOINT') and os.environ.get('FIRECRAWL_API_KEY') else 'not_configured',
                        'delivery':'polling_only_no_chat_push'}
         if method=='POST' and path=='/v1/tasks':

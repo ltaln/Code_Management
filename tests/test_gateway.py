@@ -191,12 +191,20 @@ class GatewayTests(unittest.TestCase):
         env={'CONTENT_TYPE':'application/json','CONTENT_LENGTH':str(len(raw)),'wsgi.input':io.BytesIO(raw)}
         self.assertEqual(self.app.body(env),{'command':'check\nconnection'})
 
+    def test_action_transport_reads_every_stream_chunk(self):
+        class ChunkedInput(io.BytesIO):
+            def read(self,size=-1):
+                return super().read(min(size,4000))
+        raw=json.dumps({'prediction':'x'*6800}).encode()
+        env={'CONTENT_TYPE':'application/json','CONTENT_LENGTH':str(len(raw)),'wsgi.input':ChunkedInput(raw)}
+        self.assertEqual(self.app.body(env,8192),{'prediction':'x'*6800})
+
     def test_openapi_schema_is_public_but_tasks_are_private(self):
         statuses=[]
         bodies=self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/openapi.json'},
                         lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('200'))
-        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.15')
+        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.16')
         self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/v1/tasks/'+'a'*32},
                  lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('401'))

@@ -513,7 +513,7 @@ class Application:
     def route(self,method,path,env):
         if method=='GET' and path=='/health':
             readiness=verify(self.root)
-            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.17',
+            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.18',
                        'collection':'configured' if os.environ.get('FIRECRAWL_ENDPOINT') and os.environ.get('FIRECRAWL_API_KEY') else 'not_configured',
                        'delivery':'polling_only_no_chat_push'}
         if method=='POST' and path=='/v1/tasks':
@@ -651,25 +651,27 @@ class Application:
             task_id=min_submit.group(1)
             task,_,index=self.input_index(task_id)
             body=self.body(env,65536)
-            if set(body)!={'p'} or not isinstance(body['p'],list) or not 1<=len(body['p'])<=999:
-                raise RequestError(400,'REQUIRED: p for every remaining match')
+            if set(body)!={'p'} or not isinstance(body['p'],list) or not 1<=len(body['p'])<=3:
+                raise RequestError(400,'REQUIRED: p with 1 to 3 remaining matches')
             expected=index.get('matches',[])
             expected_by_number={x['match_no']:x for x in expected}
             supplied={x.get('n'):x for x in body['p'] if isinstance(x,dict)}
             saved={x['match_no'] for x in self.store.predictions(task_id)}
-            required=set(expected_by_number) if task['status']=='COMPLETED' else set(expected_by_number)-saved
-            if len(supplied)!=len(body['p']) or set(supplied)!=required:
-                raise RequestError(400,'MIN_BATCH_MUST_CONTAIN_EVERY_REMAINING_MATCH_ONCE')
-            if task['status']=='COMPLETED' and task.get('prediction_commit'):
-                return 200,{'task_id':task_id,'status':'COMPLETED','is_prediction':True,
-                            'saved_matches':[],'prediction_commit':task['prediction_commit'],
-                            'report_url':f'/v1/tasks/{task_id}/report'}
+            remaining=set(expected_by_number)-saved
+            if len(supplied)!=len(body['p']) or not set(supplied) or not set(supplied)<=remaining:
+                raise RequestError(400,'MIN_BATCH_MUST_CONTAIN_UNSAVED_MATCHES_ONCE')
             expanded=[self.expand_min_result(supplied[number],expected_by_number[number]) for number in sorted(supplied)]
             hashes=[]
             for result in expanded:
                 content_hash,created=self.store.save_match_prediction(
                     task_id,result['match_no'],result['code'],result)
                 hashes.append({'match_no':result['match_no'],'content_sha256':content_hash,'created':created})
+            remaining_after=sorted(remaining-set(supplied))
+            if remaining_after:
+                return 202,{'task_id':task_id,'status':'AWAITING_GPT','is_prediction':False,
+                            'saved_matches':hashes,'must_continue':True,
+                            'remaining_match_nos':remaining_after,'next_operation':'saveHH520MinBatch',
+                            'instruction':'Do not reply. Submit the next 1 to 3 remaining matches in this same turn.'}
             commit,_=self.finalize_prediction(task_id)
             return 200,{'task_id':task_id,'status':'COMPLETED','is_prediction':True,
                         'saved_matches':hashes,'prediction_commit':commit,

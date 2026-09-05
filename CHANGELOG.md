@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.4.18 · 2026-09-06
+
+- 最小传输改为每批 1–3 场并返回剩余场次，规避 Actions 的 4,000 字节单次请求上限；最后一批自动生成 Prediction Commit。
+
 ## 0.4.17 · 2026-09-06
 
 - 新增低于 4 KB 的 `saveHH520MinBatch` 传输，保留 13 模块状态、证据、七项结果、警告与预测理由，并直接生成 Prediction Commit。

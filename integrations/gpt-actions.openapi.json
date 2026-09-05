@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "HH520 private prediction gateway",
-    "version": "0.4.17",
+    "version": "0.4.18",
     "description": "Collects future pre-match data, hands bounded match packages to GPT, and stores immutable HH520 prediction commits."
   },
   "servers": [
@@ -1025,7 +1025,7 @@
     "/v1/tasks/{task_id}/analysis-min": {
       "post": {
         "operationId": "saveHH520MinBatch",
-        "summary": "Save every remaining match with the under-4KB transport and immediately finalize the immutable Prediction Commit.",
+        "summary": "Save 1 to 3 remaining matches under the 4KB transport limit; continue until the final chunk creates the Prediction Commit.",
         "parameters": [
           {
             "name": "task_id",
@@ -1051,7 +1051,7 @@
                   "p": {
                     "type": "array",
                     "minItems": 1,
-                    "maxItems": 999,
+                    "maxItems": 3,
                     "items": {
                       "$ref": "#/components/schemas/MinMatchPrediction"
                     }
@@ -1064,6 +1064,16 @@
         "responses": {
           "200": {
             "description": "Minimal batch result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Chunk saved; immediately submit the next remaining chunk",
             "content": {
               "application/json": {
                 "schema": {

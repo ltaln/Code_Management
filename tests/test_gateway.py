@@ -115,11 +115,9 @@ class GatewayTests(unittest.TestCase):
         minimal={'p':[{'n':1,'c':'20990811001','m':'C'*13,'e':['mixed_data'],
                        'r':['PASS','PASS','PASS','PASS','PASS','PASS','低'],
                        'w':[],'p':'数据有限，保守输出。'}]}
-        encoded=json.dumps(minimal,ensure_ascii=False).encode()
-        env={'CONTENT_TYPE':'application/json','CONTENT_LENGTH':str(len(encoded)),'wsgi.input':io.BytesIO(encoded)}
-        status,min_final=self.app.route('POST',f'/v1/tasks/{task}/analysis-min',env)
-        self.assertEqual(status,200)
-        self.assertTrue(min_final['is_prediction'])
+        expanded=self.app.expand_min_result(minimal['p'][0],{'match_no':1,'code':'20990811001'})
+        self.assertEqual(len(expanded['modules']),13)
+        self.assertEqual(expanded['results']['confidence'],'低')
 
     def test_probe_is_not_prediction(self):
         task=self.create()
@@ -162,6 +160,37 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(status,200)
         self.assertTrue(final['is_prediction'])
         self.assertEqual(self.store.get(task)['status'],'COMPLETED')
+
+    def test_min_transport_continues_until_final_chunk(self):
+        task=self.create('预测 2099-08-11 所有比赛','min-chunks')
+        _,token=self.store.claim()
+        self.store.renew(task,token,'COLLECTING')
+        base=self.path.parent/'collections'/task/token
+        package_dir=Path('data/matches/2099-08-11/min_test')
+        (base/package_dir).mkdir(parents=True)
+        matches=[]
+        for number in (1,2):
+            code=f'20990811{number:03d}'
+            file=f'match_{number:03d}_{code}.json'
+            (base/package_dir/file).write_text('{}',encoding='utf-8')
+            matches.append({'match_no':number,'code':code,'file':file,'complete':True})
+        index_path=package_dir/'index.json'
+        (base/index_path).write_text(json.dumps({'matches':matches}),encoding='utf-8')
+        self.store.handoff(task,token,{'attempt_id':token,'package_index':index_path.as_posix(),
+                           'package_dir':package_dir.as_posix(),'snapshot_id':'min-snapshot'},'ready')
+        def submit(number):
+            code=f'20990811{number:03d}'
+            body={'p':[{'n':number,'c':code,'m':'C'*13,'e':['mixed_data'],
+                        'r':['PASS']*7,'w':[],'p':'保守输出'}]}
+            encoded=json.dumps(body,ensure_ascii=False).encode()
+            env={'CONTENT_TYPE':'application/json','CONTENT_LENGTH':str(len(encoded)),'wsgi.input':io.BytesIO(encoded)}
+            return self.app.route('POST',f'/v1/tasks/{task}/analysis-min',env)
+        status,first=submit(1)
+        self.assertEqual(status,202)
+        self.assertEqual(first['remaining_match_nos'],[2])
+        status,final=submit(2)
+        self.assertEqual(status,200)
+        self.assertTrue(final['is_prediction'])
 
     def test_transient_task_tells_gpt_to_continue(self):
         task=self.create()
@@ -213,7 +242,7 @@ class GatewayTests(unittest.TestCase):
         bodies=self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/openapi.json'},
                         lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('200'))
-        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.17')
+        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.18')
         self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/v1/tasks/'+'a'*32},
                  lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('401'))

@@ -3,8 +3,8 @@
   "files": {
     "build_match_packages.py": "ff2c1758d8ec0a1c8bb32a332cb49450722d1e72390d143943a0e7adb24381a7",
     "match_identity.py": "0878ab877bc1c6ca65abea3982b4a0ef8a478fd87488b85c6c862cce8fd8cf12",
-    "run_pipeline.py": "708384db41fadbace48d2410c757301d97df00b5987c34ab3c591531710cdbbe"
+    "run_pipeline.py": "f652dc272cf925c7f218a455aced2ca3fbc94d003a5670c8c762653108d0ae6a"
   },
   "base_commit": "cb20b37e96b047007e21d6de436107d34287972e",
-  "runtime_revision": "identity-v2-target-date-parallel16-chunk3"
+  "runtime_revision": "identity-v2-target-date-only-parallel16-chunk3"
 }

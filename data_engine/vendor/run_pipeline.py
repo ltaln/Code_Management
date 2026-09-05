@@ -100,7 +100,7 @@ def extract_links(html,base):
 def classify_supported_url(url,date):
     p=urlparse(url); path=p.path; q=parse_qs(p.query); compact=date.replace("-","")
     if path in {"","/"}:
-        d=(q.get("date") or [""])[0]; return "match_list" if not d or d==compact else None
+        d=(q.get("date") or [""])[0]; return "match_list" if d==compact else None
     if path=="/xi.php" and (q.get("id") or [""])[0].isdigit(): return "mixed_data"
     if path=="/tx/10017.php" and (q.get("riqi") or [""])[0]==date and (q.get("changci") or [""])[0].isdigit(): return "score_odds_changes"
     if path in {"/tx/10016.php","/tx/10015.php"}:

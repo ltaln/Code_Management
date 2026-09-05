@@ -155,7 +155,7 @@ class GatewayTests(unittest.TestCase):
         bodies=self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/openapi.json'},
                         lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('200'))
-        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.8')
+        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.9')
         self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/v1/tasks/'+'a'*32},
                  lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('401'))

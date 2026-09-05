@@ -25,6 +25,7 @@ services:
       FIRECRAWL_API_KEY: ${FIRECRAWL_API_KEY:-}
       HH520_MAX_PAGES: ${HH520_MAX_PAGES:-150}
       HH520_COLLECTION_TIMEOUT: ${HH520_COLLECTION_TIMEOUT:-1800}
+      HH520_COLLECT_CONCURRENCY: ${HH520_COLLECT_CONCURRENCY:-8}
     volumes:
       - hh520_state:/state
     restart: unless-stopped

@@ -1,4 +1,5 @@
 import argparse
+from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 import re
@@ -120,6 +121,17 @@ def discover(html,base,date):
         if c and u not in seen: seen.add(u); out.append((u,c))
     return out
 
+def collect_page(item, api_key, skip_source_validation):
+    url,cat,origin=item
+    source=None
+    if not skip_source_validation:
+        try: source=fetch_source(url)
+        except Exception as e: source={"error":str(e)}
+    print(f"Firecrawl scrape [{cat}]: {url}")
+    try: response=scrape_url(url,api_key)
+    except Exception as e: return item,source,None,e
+    return item,source,response,None
+
 def main():
     ap=argparse.ArgumentParser(); ap.add_argument("--date",required=True); ap.add_argument("--urls",nargs="*"); ap.add_argument("--skip-source-validation",action="store_true"); ap.add_argument("--max-pages",type=int,default=500); a=ap.parse_args()
     key=os.environ.get("FIRECRAWL_API_KEY")
@@ -128,24 +140,31 @@ def main():
     queue=deque(); queued=set()
     for u in load_seed_urls(a.urls,a.date): queue.append((u,classify_supported_url(u,a.date) or "seed","seed")); queued.add(u)
     docs=[]; vals=[]; discoveries=[]; processed=set(); failures=[]
-    while queue and len(processed)<a.max_pages:
-        url,cat,origin=queue.popleft(); url=canonicalize_url(url)
-        if url in processed: continue
-        processed.add(url); source=None
-        if not a.skip_source_validation:
-            try: source=fetch_source(url); (src/f"{slugify(url)}.html").write_text(source["html"],encoding="utf-8")
-            except Exception as e: source={"error":str(e)}
-        print(f"Firecrawl scrape [{cat}]: {url}")
-        try: response=scrape_url(url,key)
-        except Exception as e:
-            print(f"SKIP after retries: {url}: {e}"); failures.append({"url":url,"category":cat,"error":str(e)}); continue
-        rec={"url":url,"category":cat,"discovered_from":origin,"fetched_at":datetime.now(timezone.utc).isoformat(),"snapshot_id":sid,"response":response}; docs.append(rec); (raw/f"{slugify(url)}.json").write_text(json.dumps(rec,ensure_ascii=False,indent=2),encoding="utf-8")
-        if source and "html" in source: vals.append(validate_source(url,source,response))
-        elif source: vals.append({"url":url,"result":"SOURCE_FETCH_FAILED","error":source.get("error")})
-        data=response.get("data",{}); html=data.get("rawHtml") or data.get("html") or (source or {}).get("html","")
-        for nu,nc in discover(html,url,a.date):
-            nu=canonicalize_url(nu)
-            if nu not in queued and nu not in processed: queued.add(nu); queue.append((nu,nc,url)); discoveries.append({"url":nu,"category":nc,"discovered_from":url})
+    concurrency=min(max(int(os.environ.get("HH520_COLLECT_CONCURRENCY","8")),1),16)
+    with ThreadPoolExecutor(max_workers=concurrency) as executor:
+        while queue and len(processed)<a.max_pages:
+            batch=[]
+            while queue and len(batch)<concurrency and len(processed)<a.max_pages:
+                url,cat,origin=queue.popleft(); url=canonicalize_url(url)
+                if url in processed: continue
+                processed.add(url); batch.append((url,cat,origin))
+            if not batch: continue
+            # Firecrawl requests in one discovery wave run concurrently. Results
+            # are consumed in queue order so archives remain deterministic.
+            results=executor.map(lambda item: collect_page(item,key,a.skip_source_validation),batch)
+            for item,source,response,error in results:
+                url,cat,origin=item
+                if source and "html" in source:
+                    (src/f"{slugify(url)}.html").write_text(source["html"],encoding="utf-8")
+                if error:
+                    print(f"SKIP after retries: {url}: {error}"); failures.append({"url":url,"category":cat,"error":str(error)}); continue
+                rec={"url":url,"category":cat,"discovered_from":origin,"fetched_at":datetime.now(timezone.utc).isoformat(),"snapshot_id":sid,"response":response}; docs.append(rec); (raw/f"{slugify(url)}.json").write_text(json.dumps(rec,ensure_ascii=False,indent=2),encoding="utf-8")
+                if source and "html" in source: vals.append(validate_source(url,source,response))
+                elif source: vals.append({"url":url,"result":"SOURCE_FETCH_FAILED","error":source.get("error")})
+                data=response.get("data",{}); html=data.get("rawHtml") or data.get("html") or (source or {}).get("html","")
+                for nu,nc in discover(html,url,a.date):
+                    nu=canonicalize_url(nu)
+                    if nu not in queued and nu not in processed: queued.add(nu); queue.append((nu,nc,url)); discoveries.append({"url":nu,"category":nc,"discovered_from":url})
     counts={}
     for x in docs: counts[x["category"]]=counts.get(x["category"],0)+1
     validation={"date":a.date,"snapshot_id":sid,"validated_urls":len(vals),"passed":sum(x.get("result")=="PASS" for x in vals),"checked":sum(x.get("result")=="CHECK" for x in vals),"results":vals}

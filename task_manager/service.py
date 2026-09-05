@@ -472,7 +472,7 @@ class Application:
     def route(self,method,path,env):
         if method=='GET' and path=='/health':
             readiness=verify(self.root)
-            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.8',
+            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.9',
                        'collection':'configured' if os.environ.get('FIRECRAWL_ENDPOINT') and os.environ.get('FIRECRAWL_API_KEY') else 'not_configured',
                        'delivery':'polling_only_no_chat_push'}
         if method=='POST' and path=='/v1/tasks':

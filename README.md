@@ -1,8 +1,8 @@
 # HH520 Football AI System
 
-工程版本 0.4.2。私人 GPT、HTTPS 任务网关、自建 Firecrawl、逐场 GPT 交接和不可变 Prediction Commit 已接通。手机可打开 **HH520 Football AI**，发送 `预测 YYYY-MM-DD 所有比赛`。模型固定为 HH520 V2.1-Test，Prompt 固定为 HH520-PROMPT-V2.1，Upgrade Package 1 保持 PARKED。
+工程版本 0.4.7。私人 GPT、HTTPS 任务网关、自建 Firecrawl、紧凑逐场 GPT 交接和不可变 Prediction Commit 已接通。手机可打开 **HH520 Football AI**，发送 `预测 YYYY-MM-DD 所有比赛`。模型固定为 HH520 V2.1-Test，Prompt 固定为 HH520-PROMPT-V2.1，Upgrade Package 1 保持 PARKED。
 
-当前已验证：原始对话恢复、冻结资产、持久任务、真实整日采集、ChatGPT Actions 8/8 操作、Bearer 认证和“检查连接”端到端返回。正式未来日期预测验收仍需产生首个真实 Prediction Commit；历史 T-30 回测继续安全阻塞，不会拿赛后网页伪造历史输入。
+当前已验证：原始对话恢复、冻结资产、持久任务、真实整日采集、13 个 ChatGPT Actions、Bearer 认证，以及 2026-09-07 的 9/9 场真实 Prediction Commit。全新日期的单命令无续令验收仍待完成；历史 T-30 回测继续安全阻塞，不会拿赛后网页伪造历史输入。
 
 ## 使用入口
 

@@ -81,20 +81,19 @@ class GatewayTests(unittest.TestCase):
         status,batch=self.app.route('GET',f'/v1/tasks/{task}/analysis-batch',{})
         self.assertEqual(status,200)
         self.assertEqual(len(batch['matches']),1)
-        modules=[{'module_id':name,'status':'COMPLETED','summary':'已按冻结流程执行','evidence_refs':['mixed_data']}
-                 for name in index['required_module_order']]
-        payload={'match_no':1,'code':'20990811001','report_markdown':'## 第1场\n\n'+'完整流程分析。'*20,
-                 'modules':modules,'results':{'correct_score_top3':[],'htft_top3':[],
+        payload={'match_no':1,'code':'20990811001','module_statuses':['COMPLETED']*13,
+                 'module_summaries':['已按冻结流程执行']*13,'evidence_refs':[['mixed_data']]*13,
+                 'results':{'correct_score_top3':[],'htft_top3':[],
                  'asian_handicap':'PASS','over_under':'PASS','one_x_two':'PASS','total_goals':'PASS','confidence':'低'},
-                 'warnings':[]}
+                 'warnings':[],'prediction_reason':'数据有限，保守输出。'}
         encoded=json.dumps({'predictions':[payload]},ensure_ascii=False).encode('utf-8')
         env={'CONTENT_TYPE':'application/json','CONTENT_LENGTH':str(len(encoded)),'wsgi.input':io.BytesIO(encoded)}
-        status,final=self.app.route('POST',f'/v1/tasks/{task}/analysis-batch',env)
+        status,final=self.app.route('POST',f'/v1/tasks/{task}/analysis-compact',env)
         self.assertEqual(status,200)
         self.assertTrue(final['is_prediction'])
         self.assertEqual(self.store.get(task)['status'],'COMPLETED')
         env={'CONTENT_TYPE':'application/json','CONTENT_LENGTH':str(len(encoded)),'wsgi.input':io.BytesIO(encoded)}
-        status,retry=self.app.route('POST',f'/v1/tasks/{task}/analysis-batch',env)
+        status,retry=self.app.route('POST',f'/v1/tasks/{task}/analysis-compact',env)
         self.assertEqual(retry['prediction_commit'],final['prediction_commit'])
 
     def test_probe_is_not_prediction(self):
@@ -141,7 +140,7 @@ class GatewayTests(unittest.TestCase):
         bodies=self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/openapi.json'},
                         lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('200'))
-        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.5')
+        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.6')
         self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/v1/tasks/'+'a'*32},
                  lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('401'))

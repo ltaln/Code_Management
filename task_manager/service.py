@@ -285,6 +285,11 @@ class Worker:
 
 
 class Application:
+    MODULE_IDS=['data_consistency_audit','data_confidence_score','water_market','team_analysis',
+                'league_analysis','company_source_analysis','correct_score','soccerstats_htft',
+                'odds_abnormal_detection','match_risk_engine','conflict_detection',
+                'cross_model_interaction','calibration']
+
     def __init__(self, store, token, root=ROOT):
         if not isinstance(token,str) or len(token)<32:
             raise ValueError('HH520_GATEWAY_TOKEN must have at least 32 characters')
@@ -390,6 +395,47 @@ class Application:
             if key not in body['results']:
                 raise RequestError(400,'RESULTS_MISSING_'+key.upper())
 
+    @classmethod
+    def expand_compact_result(cls, body, expected):
+        required={'match_no','code','module_statuses','module_summaries','evidence_refs',
+                  'results','warnings','prediction_reason'}
+        if set(body)!=required or body.get('match_no')!=expected['match_no'] or body.get('code')!=expected['code']:
+            raise RequestError(400,'COMPACT_RESULT_FIELDS_INVALID')
+        statuses,summaries,refs=body['module_statuses'],body['module_summaries'],body['evidence_refs']
+        if not all(isinstance(x,list) and len(x)==len(cls.MODULE_IDS) for x in (statuses,summaries,refs)):
+            raise RequestError(400,'COMPACT_MODULE_ARRAYS_MUST_HAVE_13_ITEMS')
+        if not all(x in ('COMPLETED','DEGRADED') for x in statuses):
+            raise RequestError(400,'COMPACT_MODULE_STATUS_INVALID')
+        if not all(isinstance(x,str) and 1<=len(x)<=800 for x in summaries):
+            raise RequestError(400,'COMPACT_MODULE_SUMMARY_INVALID')
+        if not all(isinstance(x,list) and x and all(isinstance(v,str) and v for v in x) for x in refs):
+            raise RequestError(400,'COMPACT_EVIDENCE_REFS_INVALID')
+        if not isinstance(body['warnings'],list) or not all(isinstance(x,str) for x in body['warnings']):
+            raise RequestError(400,'COMPACT_WARNINGS_INVALID')
+        if not isinstance(body['prediction_reason'],str) or not body['prediction_reason'].strip():
+            raise RequestError(400,'COMPACT_REASON_INVALID')
+        results=body['results']
+        if not isinstance(results,dict):
+            raise RequestError(400,'COMPACT_RESULTS_INVALID')
+        for key in ('correct_score_top3','htft_top3','asian_handicap','over_under','one_x_two','total_goals','confidence'):
+            if key not in results:
+                raise RequestError(400,'RESULTS_MISSING_'+key.upper())
+        modules=[{'module_id':module_id,'status':statuses[i],'summary':summaries[i],
+                  'evidence_refs':refs[i]} for i,module_id in enumerate(cls.MODULE_IDS)]
+        lines=[f"## 第 {body['match_no']} 场 · {body['code']}","","### 完整冻结流程"]
+        lines += [f"- {m['module_id']} [{m['status']}]：{m['summary']}（证据：{', '.join(m['evidence_refs'])}）"
+                  for m in modules]
+        lines += ['', '### 预测结果',
+                  '- 精准比分 Top3：'+json.dumps(results['correct_score_top3'],ensure_ascii=False),
+                  '- 半全场 Top3：'+json.dumps(results['htft_top3'],ensure_ascii=False),
+                  f"- 亚洲盘：{results['asian_handicap']}",f"- 大小球：{results['over_under']}",
+                  f"- 胜平负：{results['one_x_two']}",f"- 总进球：{results['total_goals']}",
+                  f"- 置信度：{results['confidence']}",f"- Prediction Reason：{body['prediction_reason']}"]
+        if body['warnings']:
+            lines += ['- 异常与降级：'+'；'.join(body['warnings'])]
+        return {'match_no':body['match_no'],'code':body['code'],'report_markdown':'\n'.join(lines),
+                'modules':modules,'results':results,'warnings':body['warnings']}
+
     def finalize_prediction(self, task_id):
         task,_,index=self.input_index(task_id)
         expected=index.get('matches',[])
@@ -426,7 +472,7 @@ class Application:
     def route(self,method,path,env):
         if method=='GET' and path=='/health':
             readiness=verify(self.root)
-            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.5',
+            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.6',
                        'collection':'configured' if os.environ.get('FIRECRAWL_ENDPOINT') and os.environ.get('FIRECRAWL_API_KEY') else 'not_configured',
                        'delivery':'polling_only_no_chat_push'}
         if method=='POST' and path=='/v1/tasks':
@@ -508,6 +554,30 @@ class Application:
             for item in expected:
                 content_hash,created=self.store.save_match_prediction(
                     task_id,item['match_no'],item['code'],supplied[item['match_no']])
+                hashes.append({'match_no':item['match_no'],'content_sha256':content_hash,'created':created})
+            commit,report=self.finalize_prediction(task_id)
+            return 200,{'task_id':task_id,'status':'COMPLETED','is_prediction':True,
+                        'saved_matches':hashes,'prediction_commit':commit,'report':report}
+        compact_submit=re.fullmatch(r'/v1/tasks/([a-f0-9]{32})/analysis-compact',path)
+        if compact_submit and method=='POST':
+            task_id=compact_submit.group(1)
+            _,_,index=self.input_index(task_id)
+            body=self.body(env,262144)
+            if set(body)!={'predictions'} or not isinstance(body['predictions'],list):
+                raise RequestError(400,'REQUIRED: predictions')
+            expected=index.get('matches',[])
+            supplied={x.get('match_no'):x for x in body['predictions'] if isinstance(x,dict)}
+            if len(supplied)!=len(body['predictions']) or set(supplied)!={x['match_no'] for x in expected}:
+                raise RequestError(400,'BATCH_MUST_CONTAIN_EVERY_MATCH_ONCE')
+            expanded=[]
+            for item in expected:
+                result=self.expand_compact_result(supplied[item['match_no']],item)
+                self.validate_match_result(result,item)
+                expanded.append(result)
+            hashes=[]
+            for item,result in zip(expected,expanded):
+                content_hash,created=self.store.save_match_prediction(
+                    task_id,item['match_no'],item['code'],result)
                 hashes.append({'match_no':item['match_no'],'content_sha256':content_hash,'created':created})
             commit,report=self.finalize_prediction(task_id)
             return 200,{'task_id':task_id,'status':'COMPLETED','is_prediction':True,

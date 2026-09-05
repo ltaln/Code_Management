@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "HH520 private prediction gateway",
-    "version": "0.4.5",
+    "version": "0.4.6",
     "description": "Collects future pre-match data, hands bounded match packages to GPT, and stores immutable HH520 prediction commits."
   },
   "servers": [
@@ -266,6 +266,122 @@
             "items": {
               "type": "string"
             }
+          }
+        }
+      },
+      "CompactMatchPrediction": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "match_no",
+          "code",
+          "module_statuses",
+          "module_summaries",
+          "evidence_refs",
+          "results",
+          "warnings",
+          "prediction_reason"
+        ],
+        "properties": {
+          "match_no": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 999
+          },
+          "code": {
+            "type": "string"
+          },
+          "module_statuses": {
+            "type": "array",
+            "minItems": 13,
+            "maxItems": 13,
+            "description": "Exactly 13 entries in required_module_order.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "COMPLETED",
+                "DEGRADED"
+              ]
+            }
+          },
+          "module_summaries": {
+            "type": "array",
+            "minItems": 13,
+            "maxItems": 13,
+            "description": "Exactly 13 Chinese summaries in required_module_order.",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 800
+            }
+          },
+          "evidence_refs": {
+            "type": "array",
+            "minItems": 13,
+            "maxItems": 13,
+            "description": "Exactly 13 evidence-reference arrays in required_module_order.",
+            "items": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "results": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "correct_score_top3",
+              "htft_top3",
+              "asian_handicap",
+              "over_under",
+              "one_x_two",
+              "total_goals",
+              "confidence"
+            ],
+            "properties": {
+              "correct_score_top3": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "htft_top3": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "asian_handicap": {
+                "type": "string"
+              },
+              "over_under": {
+                "type": "string"
+              },
+              "one_x_two": {
+                "type": "string"
+              },
+              "total_goals": {
+                "type": "string"
+              },
+              "confidence": {
+                "type": "string"
+              }
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "prediction_reason": {
+            "type": "string",
+            "minLength": 1
           }
         }
       }
@@ -637,6 +753,59 @@
         "responses": {
           "200": {
             "description": "Batch result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{task_id}/analysis-compact": {
+      "post": {
+        "operationId": "saveHH520CompactBatch",
+        "summary": "Submit all match analyses in a compact form; the server expands the 13 modules, validates every match, saves immutably, finalizes, and returns the Prediction Commit.",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "additionalProperties": false,
+                "required": [
+                  "predictions"
+                ],
+                "properties": {
+                  "predictions": {
+                    "type": "array",
+                    "minItems": 1,
+                    "maxItems": 999,
+                    "items": {
+                      "$ref": "#/components/schemas/CompactMatchPrediction"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Compact batch result",
             "content": {
               "application/json": {
                 "schema": {

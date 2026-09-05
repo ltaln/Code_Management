@@ -339,8 +339,8 @@ class Application:
             raise RequestError(400,'JSON_OBJECT_REQUIRED')
         return value
 
-    def task_progress(self, task_id, wait_seconds=25):
-        """Long-poll transient states so a GPT turn can keep moving without busy polling."""
+    def task_progress(self, task_id, wait_seconds=8):
+        """Short-poll transient states within the ChatGPT Actions request timeout."""
         deadline=time.monotonic()+wait_seconds
         task=self.store.get(task_id)
         while task['status'] in ('CREATED','STARTUP_CHECK','COLLECTING') and time.monotonic()<deadline:
@@ -472,7 +472,7 @@ class Application:
     def route(self,method,path,env):
         if method=='GET' and path=='/health':
             readiness=verify(self.root)
-            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.7',
+            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.8',
                        'collection':'configured' if os.environ.get('FIRECRAWL_ENDPOINT') and os.environ.get('FIRECRAWL_API_KEY') else 'not_configured',
                        'delivery':'polling_only_no_chat_push'}
         if method=='POST' and path=='/v1/tasks':

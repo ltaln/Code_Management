@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "HH520 private prediction gateway",
-    "version": "0.4.7",
+    "version": "0.4.8",
     "description": "Collects future pre-match data, hands bounded match packages to GPT, and stores immutable HH520 prediction commits."
   },
   "servers": [
@@ -554,7 +554,7 @@
     "/v1/tasks/{task_id}": {
       "get": {
         "operationId": "getHH520Task",
-        "summary": "Long-poll task progress. While must_continue=true, call this operation again in the same turn and do not reply to the user.",
+        "summary": "Short-poll task progress within the Actions timeout. While must_continue=true, call this operation again in the same turn and do not reply to the user.",
         "parameters": [
           {
             "name": "task_id",

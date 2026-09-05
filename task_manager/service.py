@@ -287,9 +287,9 @@ class Worker:
                     if payload['mode']=='prediction':
                         result.update(collection_policy='FRESH_PER_PREDICTION',fresh_for_task_id=row['id'],
                                       reused_collection=False)
-                        self.store.prune_prediction_collections(row['id'],token)
                     report=collection_report(result)
                     if payload['mode']=='prediction' and result['collection_complete'] and result['prediction_eligible']:
+                        self.store.prune_prediction_collections(row['id'],token)
                         if not self.store.handoff(row['id'],token,result,report):
                             return True
                         return True

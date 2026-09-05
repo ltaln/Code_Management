@@ -118,7 +118,7 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(row['status'],'COMPLETED')
         self.assertIn('这不是比赛预测',row['report'])
 
-    def test_compact_chunks_finalize_on_last_chunk(self):
+    def test_compact_batch_requires_every_remaining_match(self):
         task=self.create('预测 2099-08-11 所有比赛','compact-chunks')
         _,token=self.store.claim()
         self.store.renew(task,token,'COLLECTING')
@@ -146,10 +146,9 @@ class GatewayTests(unittest.TestCase):
             encoded=json.dumps({'predictions':[payload(n) for n in numbers]},ensure_ascii=False).encode()
             env={'CONTENT_TYPE':'application/json','CONTENT_LENGTH':str(len(encoded)),'wsgi.input':io.BytesIO(encoded)}
             return self.app.route('POST',f'/v1/tasks/{task}/analysis-compact',env)
-        status,partial=submit([1,2,3])
-        self.assertEqual(status,202)
-        self.assertEqual(partial['remaining_match_nos'],[4])
-        status,final=submit([4])
+        with self.assertRaisesRegex(RequestError,'COMPACT_BATCH_MUST_CONTAIN_EVERY_REMAINING_MATCH_ONCE'):
+            submit([1,2,3])
+        status,final=submit([1,2,3,4])
         self.assertEqual(status,200)
         self.assertTrue(final['is_prediction'])
         self.assertEqual(self.store.get(task)['status'],'COMPLETED')
@@ -191,7 +190,7 @@ class GatewayTests(unittest.TestCase):
         bodies=self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/openapi.json'},
                         lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('200'))
-        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.10')
+        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.11')
         self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/v1/tasks/'+'a'*32},
                  lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('401'))

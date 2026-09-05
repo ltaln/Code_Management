@@ -472,7 +472,7 @@ class Application:
     def route(self,method,path,env):
         if method=='GET' and path=='/health':
             readiness=verify(self.root)
-            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.10',
+            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.11',
                        'collection':'configured' if os.environ.get('FIRECRAWL_ENDPOINT') and os.environ.get('FIRECRAWL_API_KEY') else 'not_configured',
                        'delivery':'polling_only_no_chat_push'}
         if method=='POST' and path=='/v1/tasks':
@@ -578,17 +578,18 @@ class Application:
         compact_submit=re.fullmatch(r'/v1/tasks/([a-f0-9]{32})/analysis-compact',path)
         if compact_submit and method=='POST':
             task_id=compact_submit.group(1)
-            _,_,index=self.input_index(task_id)
-            body=self.body(env,262144)
+            task,_,index=self.input_index(task_id)
+            body=self.body(env,524288)
             if (set(body)!={'predictions'} or not isinstance(body['predictions'],list)
-                    or not 1<=len(body['predictions'])<=3):
-                raise RequestError(400,'REQUIRED: predictions chunk with 1 to 3 matches')
+                    or not 1<=len(body['predictions'])<=999):
+                raise RequestError(400,'REQUIRED: predictions for every remaining match')
             expected=index.get('matches',[])
             expected_by_number={x['match_no']:x for x in expected}
             supplied={x.get('match_no'):x for x in body['predictions'] if isinstance(x,dict)}
-            if (len(supplied)!=len(body['predictions']) or not set(supplied)
-                    or not set(supplied)<=set(expected_by_number)):
-                raise RequestError(400,'COMPACT_CHUNK_MATCH_IDENTITIES_INVALID')
+            saved={x['match_no'] for x in self.store.predictions(task_id)}
+            required=set(expected_by_number) if task['status']=='COMPLETED' else set(expected_by_number)-saved
+            if len(supplied)!=len(body['predictions']) or set(supplied)!=required:
+                raise RequestError(400,'COMPACT_BATCH_MUST_CONTAIN_EVERY_REMAINING_MATCH_ONCE')
             expanded=[]
             chunk=[expected_by_number[number] for number in sorted(supplied)]
             for item in chunk:
@@ -600,14 +601,6 @@ class Application:
                 content_hash,created=self.store.save_match_prediction(
                     task_id,item['match_no'],item['code'],result)
                 hashes.append({'match_no':item['match_no'],'content_sha256':content_hash,'created':created})
-            records=self.store.predictions(task_id)
-            saved={x['match_no'] for x in records}
-            remaining=[x['match_no'] for x in expected if x['match_no'] not in saved]
-            if remaining:
-                return 202,{'task_id':task_id,'status':'AWAITING_GPT','is_prediction':False,
-                            'saved_matches':hashes,'saved_count':len(saved),'remaining_match_nos':remaining,
-                            'must_continue':True,'next_operation':'saveHH520CompactBatch',
-                            'instruction':'Submit the next 1-to-3-match compact chunk in this same turn.'}
             commit,_=self.finalize_prediction(task_id)
             return 200,{'task_id':task_id,'status':'COMPLETED','is_prediction':True,
                         'saved_matches':hashes,'prediction_commit':commit,

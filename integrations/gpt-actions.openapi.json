@@ -384,6 +384,116 @@
             "minLength": 1
           }
         }
+      },
+      "CompactSingleMatchPrediction": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "code",
+          "module_statuses",
+          "module_summaries",
+          "evidence_refs",
+          "results",
+          "warnings",
+          "prediction_reason"
+        ],
+        "properties": {
+          "code": {
+            "type": "string"
+          },
+          "module_statuses": {
+            "type": "array",
+            "minItems": 13,
+            "maxItems": 13,
+            "description": "Exactly 13 entries in required_module_order.",
+            "items": {
+              "type": "string",
+              "enum": [
+                "COMPLETED",
+                "DEGRADED"
+              ]
+            }
+          },
+          "module_summaries": {
+            "type": "array",
+            "minItems": 13,
+            "maxItems": 13,
+            "description": "Exactly 13 Chinese summaries in required_module_order.",
+            "items": {
+              "type": "string",
+              "minLength": 1,
+              "maxLength": 800
+            }
+          },
+          "evidence_refs": {
+            "type": "array",
+            "minItems": 13,
+            "maxItems": 13,
+            "description": "Exactly 13 evidence-reference arrays in required_module_order.",
+            "items": {
+              "type": "array",
+              "minItems": 1,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              }
+            }
+          },
+          "results": {
+            "type": "object",
+            "additionalProperties": true,
+            "required": [
+              "correct_score_top3",
+              "htft_top3",
+              "asian_handicap",
+              "over_under",
+              "one_x_two",
+              "total_goals",
+              "confidence"
+            ],
+            "properties": {
+              "correct_score_top3": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "htft_top3": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              },
+              "asian_handicap": {
+                "type": "string"
+              },
+              "over_under": {
+                "type": "string"
+              },
+              "one_x_two": {
+                "type": "string"
+              },
+              "total_goals": {
+                "type": "string"
+              },
+              "confidence": {
+                "type": "string"
+              }
+            }
+          },
+          "warnings": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "prediction_reason": {
+            "type": "string",
+            "minLength": 1
+          }
+        }
       }
     }
   },
@@ -847,7 +957,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/CompactMatchPrediction"
+                "$ref": "#/components/schemas/CompactSingleMatchPrediction"
               }
             }
           }

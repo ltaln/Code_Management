@@ -22,6 +22,14 @@ base=v.verify(ROOT)
 assert base['asset_integrity']=='PASS',base
 results=[{'case':'original_assets','passed':True}]
 
+portable=cases/'portable_line_endings'
+shutil.copytree(ROOT,portable,ignore=shutil.ignore_patterns('.git','__pycache__','runtime'))
+portable_manifest=portable/'models/HH520_V2.1-Test/manifest.json'
+portable_manifest.write_bytes(portable_manifest.read_bytes().replace(b'\r\n',b'\n').replace(b'\n',b'\r\n'))
+portable_report=v.verify(portable)
+assert portable_report['asset_integrity']=='PASS',portable_report
+results.append({'case':'portable_line_endings','passed':True,'detected':'SAME_CONTENT'})
+
 def run_case(name, mutate, expected):
     target=cases/name
     shutil.copytree(ROOT,target,ignore=shutil.ignore_patterns('.git','__pycache__','runtime'))

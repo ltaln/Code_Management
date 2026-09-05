@@ -27,6 +27,14 @@ def digest(path: Path) -> str:
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+def asset_digest(path: Path) -> str:
+    """Hash text assets consistently across Windows and Linux checkouts."""
+    data=path.read_bytes()
+    if path.suffix.lower() in {'.md','.json'}:
+        data=data.replace(b'\r\n',b'\n')
+    return hashlib.sha256(data).hexdigest()
+
+
 def files(root: Path):
     return sorted(p for p in root.rglob('*') if p.is_file() and
                   not any(part in {'.git', '__pycache__', 'runtime'} for part in p.relative_to(root).parts))
@@ -65,7 +73,7 @@ def verify(root: Path = ROOT) -> dict:
             errors.append(f'UNSAFE_LOCK_PATH: {rel}')
         elif not p.is_file():
             errors.append(f'MISSING_ASSET: {rel}')
-        elif digest(p) != expected:
+        elif asset_digest(p) != expected:
             errors.append(f'ASSET_HASH_MISMATCH: {rel}')
 
     index = documents.get('docs/sources/index.json', [])

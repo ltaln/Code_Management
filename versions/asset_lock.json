@@ -1,8 +1,8 @@
 {
-  "lock_format": 1,
+  "lock_format": 2,
   "model": "HH520 V2.1-Test",
   "release": "0.3.0",
-  "meaning": "Integrity of recovered bytes and reconciled frozen operational order; ChatGPT Actions runtime is connected and verified separately",
+  "meaning": "Integrity of recovered content and reconciled frozen operational order; Markdown and JSON line endings are normalized to LF before hashing so verification is identical on Windows and Linux",
   "protected_roots": [
     "models",
     "prompts",
@@ -12,10 +12,10 @@
     "docs/sources"
   ],
   "files": {
-    "models/HH520_V2.1-Test/manifest.json": "17cfbbb795680e4576112cc1c098b239c5b47e19adfb8346dfe5ced00e2c3602",
+    "models/HH520_V2.1-Test/manifest.json": "38ef75b3c6c682454dd0d0766c8e9d3b0967e97accca3d3cf53e12525b513502",
     "models/HH520_V2.1-Test/冻结基线补充.md": "d7b808092ad9e0eb3a8234a6ed0c44f659f04ed9d3043bc253386ee501633503",
     "models/HH520_V2.1-Test/分析模块.md": "86aaad5856f869b64e534451b2bd3ea0882958d7f1eb9eb4d7aa03987855fbf4",
-    "models/HH520_V2.1-Test/执行流程.md": "5a8fb052fffe36bd8ec600fa84bc48a933fa2fdeeb47002acc6ed60ba09c958d",
+    "models/HH520_V2.1-Test/执行流程.md": "a9f9e0115bdaa8ebb427eaf93bbd723d260b526a83b75a6b0cdf22ce9d8155fa",
     "models/HH520_V2.1-Test/提示词.md": "ed839b52c7694aeb03ce52b3123b36aae89d6125e56352c71a4fc1767beec12b",
     "models/HH520_V2.1-Test/数据要求.md": "a3a24d38cd88fb162e054950a98b3dcb3f27b8258e56b0ca166065e975c3f8e5",
     "models/HH520_V2.1-Test/校准规则.md": "d9c644d701123a9d3d56a141608c9d0419c871034d886a847a7e617a9eef1536",
@@ -29,7 +29,7 @@
     "prompts/README.md": "a056fb2c0b53f9a31cb1cad696531d97233a18fb7301729a1f97b4c640da66f7",
     "rules/README.md": "3f944a34359c08c4c0e1335fb506379472769302bc08a760cdfe82165e120819",
     "calibration/README.md": "04ae011bc7c5e4e59fdf3c501988f0ce0a3ff10276d07b6b3b031db6c04b0402",
-    "workflows/prediction.json": "c932b140e36460560e54d7d354d553f945e467f9c8cf81a89901474b5caf1435",
+    "workflows/prediction.json": "4a13d19eb8a13c3e69c8a0d49717e1dd163966ef8f09577f0d6231840c01035f",
     "docs/sources/architecture_v2_original.md": "6d279b138e3ab79b13daeb5e3323d912561e86eae5324d1240c2a8e9ea8405cd",
     "docs/sources/backtest_amendment_original.md": "8aa992164c8cabd744ffbd1879d20fb48c813ac3c020606c2b27b8c965619ace",
     "docs/sources/chapter13_original.md": "b65dd2a30e03fa4278d7c2fc46ea1e5fdd3663d80e286c7a1c0c2f55e14f75db",

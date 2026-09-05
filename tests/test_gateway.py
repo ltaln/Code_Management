@@ -78,20 +78,23 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(status,200)
         status,match=self.app.route('GET',f'/v1/tasks/{task}/matches/1',{})
         self.assertEqual(match['package_sha256'],hashlib.sha256((self.path.parent/'collections'/task/self.store.get(task)['input_ref']['attempt_id']/'data/matches/2099-08-11/snapshot_identity_v1/match_001_20990811001.json').read_bytes()).hexdigest())
+        status,batch=self.app.route('GET',f'/v1/tasks/{task}/analysis-batch',{})
+        self.assertEqual(status,200)
+        self.assertEqual(len(batch['matches']),1)
         modules=[{'module_id':name,'status':'COMPLETED','summary':'已按冻结流程执行','evidence_refs':['mixed_data']}
                  for name in index['required_module_order']]
         payload={'match_no':1,'code':'20990811001','report_markdown':'## 第1场\n\n'+'完整流程分析。'*20,
                  'modules':modules,'results':{'correct_score_top3':[],'htft_top3':[],
                  'asian_handicap':'PASS','over_under':'PASS','one_x_two':'PASS','total_goals':'PASS','confidence':'低'},
                  'warnings':[]}
-        encoded=json.dumps(payload,ensure_ascii=False).encode('utf-8')
+        encoded=json.dumps({'predictions':[payload]},ensure_ascii=False).encode('utf-8')
         env={'CONTENT_TYPE':'application/json','CONTENT_LENGTH':str(len(encoded)),'wsgi.input':io.BytesIO(encoded)}
-        status,saved=self.app.route('POST',f'/v1/tasks/{task}/matches/1/prediction',env)
-        self.assertEqual(status,202)
-        status,final=self.app.route('POST',f'/v1/tasks/{task}/finalize',{})
+        status,final=self.app.route('POST',f'/v1/tasks/{task}/analysis-batch',env)
+        self.assertEqual(status,200)
         self.assertTrue(final['is_prediction'])
         self.assertEqual(self.store.get(task)['status'],'COMPLETED')
-        status,retry=self.app.route('POST',f'/v1/tasks/{task}/finalize',{})
+        env={'CONTENT_TYPE':'application/json','CONTENT_LENGTH':str(len(encoded)),'wsgi.input':io.BytesIO(encoded)}
+        status,retry=self.app.route('POST',f'/v1/tasks/{task}/analysis-batch',env)
         self.assertEqual(retry['prediction_commit'],final['prediction_commit'])
 
     def test_probe_is_not_prediction(self):
@@ -138,7 +141,7 @@ class GatewayTests(unittest.TestCase):
         bodies=self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/openapi.json'},
                         lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('200'))
-        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.3')
+        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.4')
         self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/v1/tasks/'+'a'*32},
                  lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('401'))

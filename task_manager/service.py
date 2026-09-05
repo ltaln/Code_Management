@@ -20,7 +20,7 @@ from wsgiref.simple_server import make_server
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from verify_assets import verify, digest
-from data_engine.gpt_input import compact_match
+from data_engine.gpt_input import compact_match, compact_match_batch
 
 
 class RequestError(Exception):
@@ -419,7 +419,7 @@ class Application:
     def route(self,method,path,env):
         if method=='GET' and path=='/health':
             readiness=verify(self.root)
-            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.3',
+            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.4',
                        'collection':'configured' if os.environ.get('FIRECRAWL_ENDPOINT') and os.environ.get('FIRECRAWL_API_KEY') else 'not_configured',
                        'delivery':'polling_only_no_chat_push'}
         if method=='POST' and path=='/v1/tasks':
@@ -452,6 +452,23 @@ class Application:
             if not package.is_relative_to(base) or not package.is_file():
                 raise RequestError(500,'MATCH_PACKAGE_MISSING')
             return 200,compact_match(package)
+        batch_input=re.fullmatch(r'/v1/tasks/([a-f0-9]{32})/analysis-batch',path)
+        if batch_input and method=='GET':
+            task_id=batch_input.group(1)
+            task,base,index=self.input_index(task_id)
+            paths=[]
+            for item in index.get('matches',[]):
+                package=(base/task['input_ref']['package_dir']/item['file']).resolve()
+                if not package.is_relative_to(base) or not package.is_file():
+                    raise RequestError(500,'MATCH_PACKAGE_MISSING')
+                paths.append(package)
+            batch=compact_match_batch(paths)
+            batch.update(task_id=task_id,status=task['status'],snapshot_id=task['input_ref']['snapshot_id'],
+                         required_module_order=['data_consistency_audit','data_confidence_score','water_market',
+                         'team_analysis','league_analysis','company_source_analysis','correct_score',
+                         'soccerstats_htft','odds_abnormal_detection','match_risk_engine','conflict_detection',
+                         'cross_model_interaction','calibration'])
+            return 200,batch
         match_submit=re.fullmatch(r'/v1/tasks/([a-f0-9]{32})/matches/(\d{1,3})/prediction',path)
         if match_submit and method=='POST':
             task_id,number=match_submit.groups()
@@ -467,6 +484,27 @@ class Application:
             content_hash,created=self.store.save_match_prediction(task_id,int(number),expected['code'],body)
             return (202 if created else 200),{'task_id':task_id,'match_no':int(number),'saved':True,
                                                'created':created,'content_sha256':content_hash}
+        batch_submit=re.fullmatch(r'/v1/tasks/([a-f0-9]{32})/analysis-batch',path)
+        if batch_submit and method=='POST':
+            task_id=batch_submit.group(1)
+            _,_,index=self.input_index(task_id)
+            body=self.body(env,524288)
+            if set(body)!={'predictions'} or not isinstance(body['predictions'],list):
+                raise RequestError(400,'REQUIRED: predictions')
+            expected=index.get('matches',[])
+            supplied={x.get('match_no'):x for x in body['predictions'] if isinstance(x,dict)}
+            if len(supplied)!=len(body['predictions']) or set(supplied)!={x['match_no'] for x in expected}:
+                raise RequestError(400,'BATCH_MUST_CONTAIN_EVERY_MATCH_ONCE')
+            for item in expected:
+                self.validate_match_result(supplied[item['match_no']],item)
+            hashes=[]
+            for item in expected:
+                content_hash,created=self.store.save_match_prediction(
+                    task_id,item['match_no'],item['code'],supplied[item['match_no']])
+                hashes.append({'match_no':item['match_no'],'content_sha256':content_hash,'created':created})
+            commit,report=self.finalize_prediction(task_id)
+            return 200,{'task_id':task_id,'status':'COMPLETED','is_prediction':True,
+                        'saved_matches':hashes,'prediction_commit':commit,'report':report}
         finalize=re.fullmatch(r'/v1/tasks/([a-f0-9]{32})/finalize',path)
         if finalize and method=='POST':
             commit,report=self.finalize_prediction(finalize.group(1))

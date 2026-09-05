@@ -88,3 +88,38 @@ def compact_match(path: Path) -> dict:
         })
     return output
 
+
+def compact_match_batch(paths: list[Path]) -> dict:
+    """Return all match-specific evidence once and de-duplicate shared context."""
+    matches=[]
+    shared=[]
+    shared_seen=set()
+    for position,path in enumerate(paths):
+        raw=path.read_bytes()
+        package=json.loads(raw)
+        item={
+            'date':package['date'],'match_no':package['match_no'],'code':package['code'],
+            'xi':package.get('xi'),'kickoff_at_raw':package.get('kickoff_at_raw'),
+            'identity_check':package['identity_check'],'snapshot_id':package['snapshot_id'],
+            'package_version':package['package_version'],'complete':package['complete'],
+            'package_sha256':hashlib.sha256(raw).hexdigest(),'sections':[],
+        }
+        for entry in package.get('sections',[]):
+            category=entry.get('category')
+            if category not in MAX_SECTION_CHARS:
+                continue
+            content,truncated=_bounded(entry.get('markdown',''),min(MAX_SECTION_CHARS[category],6000))
+            item['sections'].append({'category':category,'source_url':entry.get('url'),
+                                     'content':content,'compressed':truncated})
+        matches.append(item)
+        if position==0:
+            for entry in package.get('shared_context',[]):
+                category=entry.get('category')
+                if category in OMIT_SHARED or category not in MAX_SECTION_CHARS or category in shared_seen:
+                    continue
+                shared_seen.add(category)
+                content,truncated=_bounded(entry.get('markdown',''),MAX_SECTION_CHARS[category])
+                shared.append({'category':category,'source_url':entry.get('url'),
+                               'content':content,'compressed':truncated})
+    return {'compression_policy':'per_match_6000_shared_once_v1','matches':matches,
+            'shared_context':shared}

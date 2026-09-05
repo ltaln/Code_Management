@@ -35,21 +35,21 @@ run_case('missing_model',lambda r:(r/'models/HH520_V2.1-Test/模型说明.md').r
 run_case('extra_model',lambda r:(r/'models/new-weights.json').write_text('{}',encoding='utf-8'),'UNLOCKED_ASSET')
 run_case('invalid_config_json',lambda r:(r/'config/task.json').write_text('{broken',encoding='utf-8'),'INVALID_JSON')
 run_case('broken_local_link',lambda r:(r/'README.md').write_text('[missing](does-not-exist.md)',encoding='utf-8'),'BROKEN_LINK')
-def enable(r):
+def disconnect(r):
     p=r/'config/system.json'
-    d=json.loads(p.read_text(encoding='utf-8'));d['prediction_enabled']=True
+    d=json.loads(p.read_text(encoding='utf-8'));d['gpt_executor']=''
     p.write_text(json.dumps(d),encoding='utf-8')
-target=cases/'premature_runtime'
+target=cases/'disconnected_runtime'
 shutil.copytree(ROOT,target,ignore=shutil.ignore_patterns('.git','__pycache__','runtime'))
-enable(target)
-premature=v.verify(target)
-assert premature['asset_integrity']=='PASS' and not premature['runtime_ready'] and 'RUNTIME_NOT_CONNECTED' in premature['readiness_blockers'],premature
-results.append({'case':'premature_runtime','passed':True,'detected':'RUNTIME_NOT_CONNECTED'})
+disconnect(target)
+disconnected=v.verify(target)
+assert disconnected['asset_integrity']=='PASS' and not disconnected['runtime_ready'] and 'RUNTIME_SWITCH_DISABLED' in disconnected['readiness_blockers'],disconnected
+results.append({'case':'disconnected_runtime','passed':True,'detected':'RUNTIME_SWITCH_DISABLED'})
 run_case('missing_phase',lambda r:(r/'docs/phases/phase_6_backtest.md').rename(r/'moved-phase.md'),'MISSING:')
 child_env=dict(os.environ,PYTHONIOENCODING='utf-8')
 proc=subprocess.run([sys.executable,str(ROOT/'scripts/verify_assets.py'),'--require-ready'],capture_output=True,text=True,encoding='utf-8',env=child_env)
-assert proc.returncode==2,proc
-results.append({'case':'readiness_gate','passed':True,'exit_code':2})
+assert proc.returncode==0,proc
+results.append({'case':'readiness_gate','passed':True,'exit_code':0})
 proc=subprocess.run([sys.executable,str(ROOT/'scripts/wake.py')],capture_output=True,text=True,encoding='utf-8',env=child_env)
 assert proc.returncode==0 and 'HH520-FOOTBALL-AI-V2026' in proc.stdout,proc
 results.append({'case':'wake','passed':True})

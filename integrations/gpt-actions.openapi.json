@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "HH520 private prediction gateway",
-    "version": "0.4.6",
+    "version": "0.4.7",
     "description": "Collects future pre-match data, hands bounded match packages to GPT, and stores immutable HH520 prediction commits."
   },
   "servers": [
@@ -806,6 +806,94 @@
         "responses": {
           "200": {
             "description": "Compact batch result",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{task_id}/matches/{match_no}/prediction-compact": {
+      "post": {
+        "operationId": "saveHH520CompactMatch",
+        "summary": "Save one compact match analysis after all 13 frozen modules have run; use this when a batch request is too large.",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "match_no",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 999
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CompactMatchPrediction"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Already saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          },
+          "202": {
+            "description": "Saved",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{task_id}/finalize-compact": {
+      "post": {
+        "operationId": "finalizeHH520PredictionCompact",
+        "summary": "Finalize after every match is saved and return only the immutable Prediction Commit metadata.",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Compact final result",
             "content": {
               "application/json": {
                 "schema": {

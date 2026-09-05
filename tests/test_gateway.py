@@ -86,6 +86,21 @@ class GatewayTests(unittest.TestCase):
                  'results':{'correct_score_top3':[],'htft_top3':[],
                  'asian_handicap':'PASS','over_under':'PASS','one_x_two':'PASS','total_goals':'PASS','confidence':'低'},
                  'warnings':[],'prediction_reason':'数据有限，保守输出。'}
+        single=json.dumps(payload,ensure_ascii=False).encode('utf-8')
+        env={'CONTENT_TYPE':'application/json','CONTENT_LENGTH':str(len(single)),'wsgi.input':io.BytesIO(single)}
+        status,saved=self.app.route('POST',f'/v1/tasks/{task}/matches/1/prediction-compact',env)
+        self.assertEqual(status,202)
+        self.assertTrue(saved['saved'])
+        env={'CONTENT_TYPE':'application/json','CONTENT_LENGTH':str(len(single)),'wsgi.input':io.BytesIO(single)}
+        status,retry_saved=self.app.route('POST',f'/v1/tasks/{task}/matches/1/prediction-compact',env)
+        self.assertEqual(status,200)
+        self.assertFalse(retry_saved['created'])
+        status,compact_final=self.app.route('POST',f'/v1/tasks/{task}/finalize-compact',{})
+        self.assertEqual(status,200)
+        self.assertTrue(compact_final['is_prediction'])
+        self.assertNotIn('report',compact_final)
+
+        # Reuse the original task for compact batch idempotency coverage.
         encoded=json.dumps({'predictions':[payload]},ensure_ascii=False).encode('utf-8')
         env={'CONTENT_TYPE':'application/json','CONTENT_LENGTH':str(len(encoded)),'wsgi.input':io.BytesIO(encoded)}
         status,final=self.app.route('POST',f'/v1/tasks/{task}/analysis-compact',env)
@@ -140,7 +155,7 @@ class GatewayTests(unittest.TestCase):
         bodies=self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/openapi.json'},
                         lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('200'))
-        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.6')
+        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.7')
         self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/v1/tasks/'+'a'*32},
                  lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('401'))

@@ -472,7 +472,7 @@ class Application:
     def route(self,method,path,env):
         if method=='GET' and path=='/health':
             readiness=verify(self.root)
-            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.6',
+            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.7',
                        'collection':'configured' if os.environ.get('FIRECRAWL_ENDPOINT') and os.environ.get('FIRECRAWL_API_KEY') else 'not_configured',
                        'delivery':'polling_only_no_chat_push'}
         if method=='POST' and path=='/v1/tasks':
@@ -537,6 +537,23 @@ class Application:
             content_hash,created=self.store.save_match_prediction(task_id,int(number),expected['code'],body)
             return (202 if created else 200),{'task_id':task_id,'match_no':int(number),'saved':True,
                                                'created':created,'content_sha256':content_hash}
+        compact_match_submit=re.fullmatch(r'/v1/tasks/([a-f0-9]{32})/matches/(\d{1,3})/prediction-compact',path)
+        if compact_match_submit and method=='POST':
+            task_id,number=compact_match_submit.groups()
+            _,_,index=self.input_index(task_id)
+            expected=next((x for x in index.get('matches',[]) if x['match_no']==int(number)),None)
+            if not expected:
+                raise RequestError(404,'MATCH_NOT_FOUND')
+            body=self.body(env,65536)
+            if 'match_no' in body and body['match_no']!=int(number):
+                raise RequestError(409,'MATCH_IDENTITY_MISMATCH')
+            body['match_no']=int(number)
+            result=self.expand_compact_result(body,expected)
+            self.validate_match_result(result,expected)
+            content_hash,created=self.store.save_match_prediction(
+                task_id,int(number),expected['code'],result)
+            return (202 if created else 200),{'task_id':task_id,'match_no':int(number),'saved':True,
+                                               'created':created,'content_sha256':content_hash}
         batch_submit=re.fullmatch(r'/v1/tasks/([a-f0-9]{32})/analysis-batch',path)
         if batch_submit and method=='POST':
             task_id=batch_submit.group(1)
@@ -587,6 +604,12 @@ class Application:
             commit,report=self.finalize_prediction(finalize.group(1))
             return 200,{'task_id':finalize.group(1),'status':'COMPLETED','is_prediction':True,
                         'prediction_commit':commit,'report':report}
+        compact_finalize=re.fullmatch(r'/v1/tasks/([a-f0-9]{32})/finalize-compact',path)
+        if compact_finalize and method=='POST':
+            task_id=compact_finalize.group(1)
+            commit,_=self.finalize_prediction(task_id)
+            return 200,{'task_id':task_id,'status':'COMPLETED','is_prediction':True,
+                        'prediction_commit':commit,'report_url':f'/v1/tasks/{task_id}/report'}
         match=re.fullmatch(r'/v1/tasks/([a-f0-9]{32})(/report|/cancel)?',path)
         if match:
             task_id,action=match.groups()

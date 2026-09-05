@@ -1,9 +1,10 @@
 {
   "repository": "https://github.com/ltaln/firecrawl-gpt-predictor",
-  "commit": "cb20b37e96b047007e21d6de436107d34287972e",
   "files": {
-    "build_match_packages.py": "c671b87aac448d1e2c00621a76806493f3a697e9a4c3d07e5e84e69bc18e9cfe",
-    "match_identity.py": "bdef3de4c55b3fd487af1924c1841e5672ebb3b3182c320ced7e405cc32713c1",
+    "build_match_packages.py": "ff2c1758d8ec0a1c8bb32a332cb49450722d1e72390d143943a0e7adb24381a7",
+    "match_identity.py": "0878ab877bc1c6ca65abea3982b4a0ef8a478fd87488b85c6c862cce8fd8cf12",
     "run_pipeline.py": "d0c950ad7f5830f76bbececa6728f6045d64d995ab9e2ebdad04e6ee2761bace"
-  }
+  },
+  "base_commit": "cb20b37e96b047007e21d6de436107d34287972e",
+  "runtime_revision": "identity-v2-missing-data-degrades"
 }

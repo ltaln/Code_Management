@@ -61,7 +61,8 @@ class RosterParser(HTMLParser):
         a = dict(attrs)
         if tag == 'div':
             if not self.depth and {'element', 'match'} <= set(a.get('class', '').split()):
-                self.ids, self.time = set(), ''
+                self.ids, self.time, self.team_names = set(), '', []
+                self.team_text, self.team_depth = '', None
                 self.depth = 1
             elif self.depth:
                 self.depth += 1
@@ -70,21 +71,30 @@ class RosterParser(HTMLParser):
                 self.ids.add(xi_id(a['href']))
             if tag == 'span' and 'time' in a.get('class', '').split():
                 self.in_time = True
+            if tag == 'div' and 'team-name' in a.get('class', '').split():
+                self.team_text, self.team_depth = '', self.depth
 
     def handle_data(self, data):
         if self.depth and self.in_time:
             self.time += data
+        if self.depth and self.team_depth is not None:
+            self.team_text += data
 
     def handle_endtag(self, tag):
         if tag == 'span':
             self.in_time = False
         if tag == 'div' and self.depth:
+            if self.team_depth == self.depth:
+                self.team_names.append(self.team_text.strip())
+                self.team_text, self.team_depth = '', None
             self.depth -= 1
             if not self.depth:
                 number = re.search(r'[:：]\s*(\d+)', self.time)
                 if len(self.ids) != 1 or not number:
                     raise ValueError('Ambiguous fixture card in authoritative match list')
-                self.fixtures.append((int(number[1]), next(iter(self.ids))))
+                if len(self.team_names) != 2 or not all(self.team_names):
+                    raise ValueError('Missing fixture teams in authoritative match list')
+                self.fixtures.append((int(number[1]), next(iter(self.ids)), tuple(self.team_names)))
 
 
 def roster(records, date):
@@ -97,7 +107,7 @@ def roster(records, date):
     parser = RosterParser()
     parser.feed(html_of(max(candidates, key=lambda r: r.get('fetched_at', ''))))
     fixtures = parser.fixtures
-    if not fixtures or len({n for n, _ in fixtures}) != len(fixtures) or len({x for _, x in fixtures}) != len(fixtures):
+    if not fixtures or len({n for n, _, _ in fixtures}) != len(fixtures) or len({x for _, x, _ in fixtures}) != len(fixtures):
         raise ValueError('Missing or conflicting fixture identities in match list')
     return fixtures
 
@@ -185,14 +195,17 @@ def assemble(records, date):
     mixed = {xi_id(r['url']): r for r in by_url.values() if r.get('category') == 'mixed_data' and xi_id(r['url'])}
     fixtures = roster(records, date)
     joined = []
-    for number, xi in fixtures:
+    for number, xi, roster_names in fixtures:
         mix = mixed.get(xi)
         if mix is None:
             raise ValueError(f'No Firecrawl mixed page for roster xi={xi}')
         teams = mixed_teams(mix)
-        errors, evidence = [], {}
+        errors, warnings, evidence = [], [], {}
         if not teams or not mix.get('response', {}).get('success') or not mix['response']['data'].get('markdown', '').strip():
             errors.append('Mixed page has no valid team identity/content')
+        roster_pair = tuple(normalized_name(x) for x in roster_names)
+        if teams and roster_pair != teams:
+            errors.append('Authoritative roster teams conflict with mixed page')
         pages = {'mixed_data': mix}
         targets = {}
         for url in links(mix):
@@ -217,28 +230,29 @@ def assemble(records, date):
         for category in SECTIONS[1:]:
             urls = targets.get(category, set())
             if len(urls) != 1:
-                errors.append(f'{category}: missing or ambiguous explicit link')
+                warnings.append(f'{category}: missing or ambiguous explicit link')
                 continue
             url = next(iter(urls))
             if category == 'score_odds_changes':
                 score_key = page_key(url)
             page = by_url.get(url)
             if not page:
-                errors.append(f'{category}: linked Firecrawl page not collected')
+                warnings.append(f'{category}: linked Firecrawl page not collected')
                 continue
             pages[category] = page
             error = check_page(page, category, xi, team_pairs)
             evidence[category] = {'url': page['url'], 'result': 'FAIL' if error else 'PASS', 'error': error}
             if error:
-                errors.append(f'{category}: {error}')
-        if not score_key or score_key[1] != number:
+                warnings.append(f'{category}: {error}')
+        if score_key and score_key[1] != number:
             errors.append('Roster number conflicts with explicitly linked score page')
-        code = f'{score_key[0].replace("-", "")}{score_key[1]:03d}' if score_key else f'unresolved-xi-{xi}'
+        code = f'{date.replace("-", "")}{number:03d}'
         kickoff = re.search(r'\b\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}', visible_text(html_of(mix)))
         joined.append({'match_no': number, 'xi': xi, 'code': code, 'pages': pages,
                        'kickoff_at_raw': kickoff[0] if kickoff else None,
                        'identity_check': {'result': 'FAIL' if errors else 'PASS', 'errors': errors,
+                                          'warnings': warnings,
                                           'verified_team_pairs': sorted(team_pairs), 'evidence': evidence}})
-    selected = {x for _, x in fixtures}
+    selected = {x for _, x, _ in fixtures}
     return joined, [{'xi': x, 'url': r['url'], 'reason': 'Not in requested competition-day roster; raw data retained'}
                     for x, r in mixed.items() if x not in selected]

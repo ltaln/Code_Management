@@ -42,7 +42,7 @@ def main():
 
     joined, unassigned = assemble(records, args.date)
 
-    outdir = args.output_root / args.date / (latest["snapshot_id"] + "_identity_v1")
+    outdir = args.output_root / args.date / (latest["snapshot_id"] + "_identity_v2")
     outdir.mkdir(parents=True, exist_ok=True)
     shared = {r["category"]: r for r in records if r["category"] in {"match_list", "daily_asian_handicap_summary", "internal_model_analysis"}}
     for category in ('match_list', 'daily_asian_handicap_summary'):
@@ -71,14 +71,16 @@ def main():
             "xi": fixture['xi'],
             "kickoff_at_raw": fixture['kickoff_at_raw'],
             "identity_check": fixture['identity_check'],
-            "package_version": "identity-v1",
+            "package_version": "identity-v2",
             "snapshot_id": latest["snapshot_id"],
             "sections": sections,
             "shared_context": [
                 {"category": c, "url": r["url"], "markdown": markdown_of(r)}
                 for c, r in shared.items()
             ],
-            "complete": all(c in pages for c in SECTIONS) and fixture['identity_check']['result'] == 'PASS',
+            # A verified roster→xi→mixed-page identity is sufficient to run.
+            # Missing optional pages are preserved as warnings and reduce DCS/confidence.
+            "complete": 'mixed_data' in pages and fixture['identity_check']['result'] == 'PASS',
         }
         fn = f"match_{i:03d}_{code}.json"
         (outdir / fn).write_text(json.dumps(package, ensure_ascii=False, indent=2), encoding="utf-8")
@@ -90,7 +92,7 @@ def main():
         "match_count": len(index),
         "complete_matches": sum(x["complete"] for x in index),
         "matches": index,
-        "package_version": "identity-v1",
+        "package_version": "identity-v2",
         "unassigned_discoveries": unassigned,
     }
     (outdir / "index.json").write_text(json.dumps(summary, ensure_ascii=False, indent=2), encoding="utf-8")

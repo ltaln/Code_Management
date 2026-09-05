@@ -2,7 +2,7 @@
   "openapi": "3.1.0",
   "info": {
     "title": "HH520 private prediction gateway",
-    "version": "0.4.2",
+    "version": "0.4.3",
     "description": "Collects future pre-match data, hands bounded match packages to GPT, and stores immutable HH520 prediction commits."
   },
   "servers": [
@@ -193,7 +193,7 @@
     "/v1/tasks": {
       "post": {
         "operationId": "createHH520Task",
-        "summary": "Create one persistent HH520 task; generate a new request_id for each user command.",
+        "summary": "Create one persistent HH520 task, then immediately call getHH520Task in the same turn; never reply after creation alone.",
         "requestBody": {
           "required": true,
           "content": {
@@ -246,7 +246,7 @@
     "/v1/tasks/{task_id}": {
       "get": {
         "operationId": "getHH520Task",
-        "summary": "Poll until status is AWAITING_GPT, COMPLETED, BLOCKED, PARTIAL or FAILED.",
+        "summary": "Long-poll task progress. While must_continue=true, call this operation again in the same turn and do not reply to the user.",
         "parameters": [
           {
             "name": "task_id",

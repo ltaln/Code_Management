@@ -79,9 +79,11 @@ class FirecrawlCollector:
         manifest = json.loads((raw/'manifest.json').read_text(encoding='utf-8'))
         hashes = {p.relative_to(work).as_posix():hashlib.sha256(p.read_bytes()).hexdigest()
                   for p in work.rglob('*.json')}
+        # Extra xi pages may be discovered from the undated home-page seed.
+        # Once the dated authoritative roster excludes them explicitly, they are
+        # retained for audit but do not make the requested-date package partial.
         complete = (index['match_count'] > 0 and index['complete_matches'] == index['match_count']
-                    and not discovery['truncated'] and not discovery['failed_pages']
-                    and not index.get('unassigned_discoveries'))
+                    and not discovery['truncated'] and not discovery['failed_pages'])
         now=datetime.now(timezone.utc)
         late_matches=[]
         for item in index['matches']:
@@ -96,7 +98,7 @@ class FirecrawlCollector:
         result = {'task_id':task_id,'attempt_id':attempt_id,'date':target_date,
                   'collected_at':datetime.now(timezone.utc).isoformat(),
                   'snapshot_id':manifest['snapshot_id'],'collector':'Firecrawl',
-                  'package_version':'identity-v1','match_count':index['match_count'],
+                  'package_version':'identity-v2','match_count':index['match_count'],
                   'complete_matches':index['complete_matches'],
                   'scraped_pages':manifest['scraped_pages'],
                   'failed_pages':discovery['failed_pages'],'truncated':discovery['truncated'],

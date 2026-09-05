@@ -327,6 +327,21 @@ class Application:
             raise RequestError(400,'JSON_OBJECT_REQUIRED')
         return value
 
+    def task_progress(self, task_id, wait_seconds=25):
+        """Long-poll transient states so a GPT turn can keep moving without busy polling."""
+        deadline=time.monotonic()+wait_seconds
+        task=self.store.get(task_id)
+        while task['status'] in ('CREATED','STARTUP_CHECK','COLLECTING') and time.monotonic()<deadline:
+            time.sleep(1)
+            task=self.store.get(task_id)
+        transient=task['status'] in ('CREATED','STARTUP_CHECK','COLLECTING')
+        task['must_continue']=transient
+        task['next_operation']='getHH520Task' if transient else (
+            'listHH520Matches' if task['status']=='AWAITING_GPT' else 'getHH520Report')
+        task['instruction']=('Do not reply to the user yet. Call getHH520Task again with this task_id.'
+                             if transient else 'Continue with next_operation in this same turn.')
+        return task
+
     def input_index(self, task_id):
         task=self.store.get(task_id)
         ref=task.get('input_ref')
@@ -404,7 +419,7 @@ class Application:
     def route(self,method,path,env):
         if method=='GET' and path=='/health':
             readiness=verify(self.root)
-            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.2',
+            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.3',
                        'collection':'configured' if os.environ.get('FIRECRAWL_ENDPOINT') and os.environ.get('FIRECRAWL_API_KEY') else 'not_configured',
                        'delivery':'polling_only_no_chat_push'}
         if method=='POST' and path=='/v1/tasks':
@@ -413,7 +428,10 @@ class Application:
                 raise RequestError(400,'REQUIRED: request_id, command')
             payload=parse_command(body['command'])
             task_id,created=self.store.create(body['request_id'],payload,digest(self.root/'versions/asset_lock.json'))
-            return (202 if created else 200),{'task_id':task_id,'status_url':f'/v1/tasks/{task_id}','report_url':f'/v1/tasks/{task_id}/report','created':created}
+            return (202 if created else 200),{'task_id':task_id,'status_url':f'/v1/tasks/{task_id}',
+                    'report_url':f'/v1/tasks/{task_id}/report','created':created,
+                    'must_continue':True,'next_operation':'getHH520Task',
+                    'instruction':'Do not reply to the user yet. Immediately call getHH520Task with this task_id.'}
         match_input=re.fullmatch(r'/v1/tasks/([a-f0-9]{32})/matches(?:/(\d{1,3}))?',path)
         if match_input and method=='GET':
             task_id,number=match_input.groups()
@@ -468,7 +486,7 @@ class Application:
                                 'ready':task['report'] is not None,'is_prediction':is_prediction,
                                 'prediction_commit':task.get('prediction_commit')}
                 if not action:
-                    return 200,task
+                    return 200,self.task_progress(task_id)
         raise RequestError(404,'NOT_FOUND')
 
 

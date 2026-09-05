@@ -101,6 +101,12 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(row['status'],'COMPLETED')
         self.assertIn('这不是比赛预测',row['report'])
 
+    def test_transient_task_tells_gpt_to_continue(self):
+        task=self.create()
+        progress=self.app.task_progress(task,wait_seconds=0)
+        self.assertTrue(progress['must_continue'])
+        self.assertEqual(progress['next_operation'],'getHH520Task')
+
     def test_expired_lease_fences_stale_worker(self):
         task=self.create()
         old,old_token=self.store.claim()
@@ -132,7 +138,7 @@ class GatewayTests(unittest.TestCase):
         bodies=self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/openapi.json'},
                         lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('200'))
-        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.2')
+        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.3')
         self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/v1/tasks/'+'a'*32},
                  lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('401'))

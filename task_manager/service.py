@@ -442,6 +442,9 @@ class Application:
             if not expected:
                 raise RequestError(404,'MATCH_NOT_FOUND')
             body=self.body(env,262144)
+            if 'match_no' in body and body['match_no']!=int(number):
+                raise RequestError(409,'MATCH_IDENTITY_MISMATCH')
+            body['match_no']=int(number)
             self.validate_match_result(body,expected)
             content_hash,created=self.store.save_match_prediction(task_id,int(number),expected['code'],body)
             return (202 if created else 200),{'task_id':task_id,'match_no':int(number),'saved':True,

@@ -1,6 +1,6 @@
 # HH520 私人 GPT 配置
 
-工程版本 0.4.0。Actions schema：`gpt-actions.openapi.json`。认证使用服务器 `/etc/hh520/gateway.env` 中的 Bearer 值；不得把密钥写入指令、知识文件、网址或 GitHub。
+工程版本 0.4.2。Actions schema：`gpt-actions.openapi.json`。认证使用服务器 `/etc/hh520/gateway.env` 中的 Bearer 值；不得把密钥写入指令、知识文件、网址或 GitHub。
 
 ## GPT 名称
 

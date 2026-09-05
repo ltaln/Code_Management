@@ -1,9 +1,9 @@
 {
-  "asset_release": "0.1.0",
+  "asset_release": "0.3.0",
   "repository": "https://github.com/ltaln/Code_Management",
   "model": "HH520 V2.1-Test",
   "asset_integrity": "PASS",
-  "runtime_ready": false,
+  "runtime_ready": true,
   "verification_report": "docs/VALIDATION.md",
   "publication_receipt": "Git history and accompanying delivery receipt; do not infer publication from this file alone"
 }

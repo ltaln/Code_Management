@@ -3,11 +3,19 @@
   "prompt_version": "HH520-PROMPT-V2.1",
   "core_frozen": true,
   "upgrade_package_1": "PARKED",
-  "asset_status": "RECONCILED_RUNTIME_HANDOFF_PENDING",
-  "runtime_enabled": false,
+  "asset_status": "RUNTIME_CONNECTED",
+  "runtime_enabled": true,
   "prompt_path": "prompts/HH520-PROMPT-V2.1.txt",
-  "source_ids": ["S01", "S02", "S03", "S04", "S05", "S06", "S07"],
-  "blockers": ["RUNTIME_NOT_CONNECTED"],
+  "source_ids": [
+    "S01",
+    "S02",
+    "S03",
+    "S04",
+    "S05",
+    "S06",
+    "S07"
+  ],
+  "blockers": [],
   "baseline_prompt_stack": {
     "master": "v1.1",
     "prediction": "v1.1",

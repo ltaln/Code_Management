@@ -1,16 +1,16 @@
 {
   "project": "HH520 Football AI System",
   "architecture_version": "2.0",
-  "asset_release": "0.1.0",
+  "asset_release": "0.3.0",
   "timezone": "Asia/Shanghai",
   "date_basis": "fixture_list_date",
   "model": "HH520 V2.1-Test",
   "prompt": "HH520-PROMPT-V2.1",
   "upgrade_package_1": "PARKED",
-  "prediction_enabled": false,
+  "prediction_enabled": true,
   "backtest_enabled": false,
   "auto_upgrade": false,
-  "data_server_url": null,
-  "gpt_executor": null,
-  "archive_store": null
+  "data_server_url": "https://hh520.156.225.23.17.sslip.io",
+  "gpt_executor": "chatgpt-actions-v1",
+  "archive_store": "server-immutable-v1"
 }

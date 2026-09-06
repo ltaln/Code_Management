@@ -277,7 +277,7 @@ class Worker:
             blockers = list(check['errors'])
             if digest(self.root/'versions/asset_lock.json') != row['asset_hash']:
                 blockers.append('ASSETS_CHANGED_SINCE_TASK_CREATED')
-            if payload['mode'] in ('collection','prediction') and not blockers:
+            if payload['mode'] in ('collection','prediction','backtest') and not blockers:
                 from data_engine.collector import FirecrawlCollector, CollectionError, collection_report
                 collector=self.collector or FirecrawlCollector(self.store.path.parent/'collections')
                 if not self.store.renew(row['id'],token,'COLLECTING'):
@@ -288,9 +288,13 @@ class Worker:
                     if payload['mode']=='prediction':
                         result.update(collection_policy='FRESH_PER_PREDICTION',fresh_for_task_id=row['id'],
                                       reused_collection=False)
+                    elif payload['mode']=='backtest':
+                        result.update(collection_policy='FRESH_PER_REPLAY',fresh_for_task_id=row['id'],
+                                      reused_collection=False,replay_result_mask_required=True)
                     report=collection_report(result)
-                    if payload['mode']=='prediction' and result['collection_complete'] and result['prediction_eligible']:
-                        self.store.prune_prediction_collections(row['id'],token)
+                    if payload['mode'] in ('prediction','backtest') and result['collection_complete'] and result['prediction_eligible']:
+                        if payload['mode']=='prediction':
+                            self.store.prune_prediction_collections(row['id'],token)
                         if not self.store.handoff(row['id'],token,result,report):
                             return True
                         return True
@@ -304,13 +308,11 @@ class Worker:
                 status = 'COMPLETED'
                 report = '# 连接检查完成\n\n命令已接收、任务已持久保存、后台检查已执行、报告已保存。\n\n这不是比赛预测。真实预测仍受模型资料与服务接入缺口阻塞。'
             else:
-                if payload['mode']!='prediction':
+                if payload['mode'] not in ('prediction','backtest'):
                     blockers += check['readiness_blockers']
                 status = 'BLOCKED'
                 report = '# 任务未进入预测\n\n' + '\n'.join('- '+x for x in sorted(set(blockers)))
                 report += '\n\n已读取重要注意事项对应资产并校验冻结文件；未采集新数据，未调用模型，未生成比分。'
-                if payload['mode']=='backtest':
-                    report += '\n\n回测允许读取服务器已有采集数据；当前回测执行服务尚未启用。'
             self.store.finish(row['id'],token,status,report,sorted(set(blockers)))
         except Exception:
             # Avoid leaking provider credentials or local paths in future adapter errors.
@@ -430,7 +432,12 @@ class Application:
             if (ref.get('collection_policy')!='FRESH_PER_PREDICTION'
                     or ref.get('fresh_for_task_id')!=task_id or ref.get('reused_collection') is not False):
                 raise RequestError(409,'PREDICTION_REQUIRES_FRESH_TASK_COLLECTION')
-        elif mode!='backtest':
+        elif mode=='backtest':
+            if (ref.get('collection_policy')!='FRESH_PER_REPLAY'
+                    or ref.get('fresh_for_task_id')!=task_id or ref.get('reused_collection') is not False
+                    or ref.get('replay_result_mask_required') is not True):
+                raise RequestError(409,'BACKTEST_REPLAY_REQUIRES_FRESH_MASKED_COLLECTION')
+        else:
             raise RequestError(403,'OLD_COLLECTION_ACCESS_RESTRICTED_TO_BACKTEST')
         attempt=ref.get('attempt_id','')
         if not re.fullmatch(r'[a-f0-9]{32}',attempt):
@@ -536,13 +543,18 @@ class Application:
         if len(records)!=len(expected):
             missing=sorted({x['match_no'] for x in expected}-{x['match_no'] for x in records})
             raise RequestError(409,'MISSING_MATCH_RESULTS:'+','.join(map(str,missing)))
+        replay=task['payload']['mode']=='backtest'
         content={'task_id':task_id,'date':task['payload']['date'],'model_version':'HH520 V2.1-Test',
                  'prompt_version':'HH520-PROMPT-V2.1','asset_lock_hash':task['asset_hash'],
-                 'snapshot_id':task['input_ref']['snapshot_id'],'matches':[x['payload'] for x in records]}
+                 'snapshot_id':task['input_ref']['snapshot_id'],
+                 'purpose':'BACKTEST_REPLAY' if replay else 'LIVE_PREDICTION',
+                 'result_mask':'TARGET_RESULT_AND_POST_KICKOFF_DATA_REMOVED_V1' if replay else None,
+                 'matches':[x['payload'] for x in records]}
         encoded=json.dumps(content,ensure_ascii=False,sort_keys=True,separators=(',',':')).encode('utf-8')
         content_hash=hashlib.sha256(encoded).hexdigest()
-        commit_id=f"HH520-{task['payload']['date'].replace('-','')}-{content_hash[:16]}"
-        archive=(self.store.path.parent/'predictions'/task['payload']['date']).resolve()
+        prefix='HH520-BTR' if replay else 'HH520'
+        commit_id=f"{prefix}-{task['payload']['date'].replace('-','')}-{content_hash[:16]}"
+        archive=(self.store.path.parent/('replay_predictions' if replay else 'predictions')/task['payload']['date']).resolve()
         archive.mkdir(parents=True,exist_ok=True)
         path=archive/(commit_id+'.json')
         if path.exists():
@@ -556,9 +568,10 @@ class Application:
         commit={'prediction_commit_id':commit_id,'content_sha256':content_hash,
                 'storage':'server-immutable-v1','created_at':datetime.now(timezone.utc).isoformat(),
                 'match_count':len(records)}
-        header=(f"# HH520 V2.1-Test 完整预测报告\n\n日期：{task['payload']['date']}\n\n"
+        header=(f"# HH520 V2.1-Test {'历史重放' if replay else '完整预测'}报告\n\n日期：{task['payload']['date']}\n\n"
                 f"数据快照：{task['input_ref']['snapshot_id']}\n\nPrediction Commit：{commit_id}\n\n"
-                "模型核心保持冻结；Upgrade Package 1：PARKED。\n\n")
+                + ("目标赛果及开赛后信息已在模型输入前屏蔽。\n\n" if replay else "")
+                + "模型核心保持冻结；Upgrade Package 1：PARKED。\n\n")
         report=header+'\n\n'.join(x['payload']['report_markdown'] for x in records)
         return self.store.complete_prediction(task_id,commit,report)[0],report
 
@@ -597,7 +610,7 @@ class Application:
             package=(base/task['input_ref']['package_dir']/item['file']).resolve()
             if not package.is_relative_to(base) or not package.is_file():
                 raise RequestError(500,'MATCH_PACKAGE_MISSING')
-            return 200,compact_match(package)
+            return 200,compact_match(package,replay=task['payload']['mode']=='backtest')
         batch_input=re.fullmatch(r'/v1/tasks/([a-f0-9]{32})/analysis-batch',path)
         if batch_input and method=='GET':
             task_id=batch_input.group(1)
@@ -608,7 +621,7 @@ class Application:
                 if not package.is_relative_to(base) or not package.is_file():
                     raise RequestError(500,'MATCH_PACKAGE_MISSING')
                 paths.append(package)
-            batch=compact_match_batch(paths)
+            batch=compact_match_batch(paths,replay=task['payload']['mode']=='backtest')
             batch.update(task_id=task_id,status=task['status'],snapshot_id=task['input_ref']['snapshot_id'],
                          required_module_order=['data_consistency_audit','data_confidence_score','water_market',
                          'team_analysis','league_analysis','company_source_analysis','correct_score',
@@ -630,7 +643,7 @@ class Application:
                     raise RequestError(500,'MATCH_PACKAGE_MISSING')
                 paths.append(package)
             try:
-                page=compact_match_page(paths,cursor)
+                page=compact_match_page(paths,cursor,replay=task['payload']['mode']=='backtest')
             except ValueError:
                 raise RequestError(400,'INVALID_ANALYSIS_CURSOR')
             saved={x['match_no'] for x in self.store.predictions(task_id)}

@@ -226,6 +226,24 @@ class GatewayTests(unittest.TestCase):
         self.assertTrue(progress['must_continue'])
         self.assertEqual(progress['next_operation'],'getHH520Task')
 
+    def test_prediction_task_delivers_bound_execution_prompt(self):
+        raw=json.dumps({'request_id':'prompt-binding','command':'预测 2099-08-11 所有比赛'},ensure_ascii=False).encode()
+        env={'CONTENT_TYPE':'application/json','CONTENT_LENGTH':str(len(raw)),'wsgi.input':io.BytesIO(raw)}
+        status,response=self.app.route('POST','/v1/tasks',env)
+        self.assertEqual(status,202)
+        bundle=response['prompt_bundle']
+        self.assertEqual(bundle['prompt_id'],'HH520-PROMPT-V2.1+HH520-PREDICTION-AI-V1.0')
+        self.assertIn('你现在运行的是 HH520 Prediction AI 预测系统。',bundle['execution_prompt'])
+        self.assertEqual(len(bundle['sha256']),64)
+
+    def test_awaiting_task_redelivers_prompt_for_mobile_resume(self):
+        task=self.create('预测 2099-08-11 所有比赛','prompt-resume')
+        with self.store.db() as db:
+            db.execute("UPDATE tasks SET status='AWAITING_GPT' WHERE id=?",(task,))
+        progress=self.app.task_progress(task,wait_seconds=0)
+        self.assertEqual(progress['prompt_bundle']['prompt_id'],self.app.execution_prompt['prompt_id'])
+        self.assertIn('Apply prompt_bundle.execution_prompt',progress['instruction'])
+
     def test_expired_lease_fences_stale_worker(self):
         task=self.create()
         old,old_token=self.store.claim()

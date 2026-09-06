@@ -1,15 +1,15 @@
-# 回测 · Prediction Archive First
+# 回测 · Fresh Full Run
 
-先加载重要注意事项与完整对应 Prompt。按日期、场次、模型和预测时点查找 Prediction Commit、Prediction Data Package、Prediction Result、Execution Log。查询有三态：FOUND、NOT_FOUND、UNAVAILABLE。
+每条新的回测命令都创建独立任务，依次执行：重新采集指定历史日期资料 → 屏蔽赛果及赛后信息 → 使用冻结模型和 Prompt 重新预测 → 生成新的 Prediction Commit → 解锁真实赛果 → 评价并生成改进方案。
 
-FOUND：校验身份、Hash、赛前时间和原记录完整性，固定引用原预测；随后获取真实结果并评价。禁止重新预测、改写原预测或调参。
+已有相同日期的成功、失败、未完成任务、Prediction Commit、快照或报告只用于审计，不能复用、跳过本次流程或阻止新任务。
 
-NOT_FOUND：仅在所有指定存储及历史索引成功查询且不存在时成立。新采集当时可用的历史数据，使用原模型与 Prompt 完整预测，生成新预测档案后再取赛果；标记 reconstructed_historical，不能冒充真实赛前发布记录。
+每次运行生成新的随机 request_id；仅同一网络请求重试复用该 request_id，以防一次命令被重复提交。
 
-UNAVAILABLE：访问失败、查询未完成、记录损坏或部分缺失都进入 BLOCKED，保留已有证据，不直接走 NOT_FOUND。批次混合有档案/无档案时按场次分支。
+某次任务失败只记录该任务错误，不阻止后续新命令。失败任务自身不得伪造预测或报告。
 
 结果数据必须和预测 worker 隔离；预测输入仅可见 as_of 之前可用信息。缺少可靠历史快照时标记不可回测，不抓当前页面伪装历史。
 
-评价输出固定先比分、再半全场、再其他市场。新评价记录链接原 prediction_id 和 commit，不产生第二份伪造的原预测。当前缺独立回测 Prompt 和执行服务，只有设计。
+评价输出固定先比分、再半全场、再其他市场。每次评价只链接本次新生成的 Prediction Commit，不修改模型参数。
 
-S07 补充：历史重建以 kickoff_at 前 30 分钟为信息截止；原真实赛前档案保留其记录的预测 cutoff 并单独报告，不倒改历史时点。
+日期归属以源网站日期目录为最高优先级；目录内次日凌晨比赛仍属于该目录日期。其余日期校验层按用户后续规则补充。

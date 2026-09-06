@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "HH520 private prediction gateway",
-    "version": "0.4.21",
-    "description": "Fresh prediction data with bounded two-match analysis pages. Backtests are sequential and the source website date directory is the highest-priority match-date authority."
+    "version": "0.4.22",
+    "description": "Every new prediction or backtest command starts a fresh full run. Only retries with the same request_id are idempotent. The source website date directory is the highest-priority match-date authority."
   },
   "servers": [
     {
@@ -523,7 +523,8 @@
                 "properties": {
                   "request_id": {
                     "type": "string",
-                    "pattern": "^[A-Za-z0-9_-]{8,100}$"
+                    "pattern": "^[A-Za-z0-9_-]{8,100}$",
+                    "description": "Generate a fresh random value for every new user command. Reuse it only when retrying the same HTTP request."
                   },
                   "command": {
                     "type": "string",
@@ -536,7 +537,7 @@
         },
         "responses": {
           "200": {
-            "description": "Existing idempotent task",
+            "description": "New task, or the same task only when retrying an identical request_id",
             "content": {
               "application/json": {
                 "schema": {

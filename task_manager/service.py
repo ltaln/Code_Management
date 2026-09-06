@@ -100,26 +100,6 @@ class Store:
                 if existing['payload'] != encoded:
                     raise RequestError(409, 'REQUEST_ID_REUSED_WITH_DIFFERENT_COMMAND')
                 return existing['id'], False
-            if payload.get('mode') == 'backtest':
-                previous = None
-                for row in db.execute('SELECT id,payload,status FROM tasks ORDER BY created DESC'):
-                    try:
-                        if json.loads(row['payload']).get('mode') == 'backtest':
-                            previous = row
-                            break
-                    except (TypeError, ValueError):
-                        continue
-                if previous:
-                    previous_payload = json.loads(previous['payload'])
-                    same_date = previous_payload.get('date') == payload.get('date')
-                    active = {'CREATED', 'STARTUP_CHECK', 'COLLECTING', 'AWAITING_GPT'}
-                    failed = {'FAILED', 'BLOCKED', 'PARTIAL'}
-                    if previous['status'] in active:
-                        if same_date:
-                            return previous['id'], False
-                        raise RequestError(409, f"PREVIOUS_BACKTEST_NOT_FINISHED:{previous['id']}:{previous['status']}")
-                    if previous['status'] in failed and not same_date:
-                        raise RequestError(409, f"PREVIOUS_BACKTEST_ERROR_UNRESOLVED:{previous['id']}:{previous['status']}")
             task_id, now = uuid.uuid4().hex, time.time()
             db.execute('INSERT INTO tasks(id,request_id,payload,status,created,updated,asset_hash) VALUES(?,?,?,?,?,?,?)',
                        (task_id, request_id, encoded, 'CREATED', now, now, asset_hash))
@@ -601,7 +581,7 @@ class Application:
     def route(self,method,path,env):
         if method=='GET' and path=='/health':
             readiness=verify(self.root)
-            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.21',
+            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.22',
                        'collection':'configured' if os.environ.get('FIRECRAWL_ENDPOINT') and os.environ.get('FIRECRAWL_API_KEY') else 'not_configured',
                        'delivery':'polling_only_no_chat_push'}
         if method=='POST' and path=='/v1/tasks':

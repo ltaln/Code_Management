@@ -15,7 +15,7 @@ docs/DECISIONS.md、models/HH520_V2.1-Test/manifest.json 和版本资产锁。
 保持 HH520 V2.1-Test 冻结、HH520-PROMPT-V2.1 不改写、Upgrade Package 1 PARKED。
 GPT 负责预测；服务器提供数据；GitHub 保存资产；任务管理中心负责持续执行。
 不要把架构设计或资产校验成功当作已完成自动预测。
-回测遵守 Prediction Archive First，历史数据不可受赛后结果污染。
+预测和回测每条新命令都从重新采集开始完整执行，不复用旧任务；回测预测输入必须屏蔽赛果和赛后数据。
 ```
 
 本地可运行 `python scripts/wake.py`。它先校验资产，再输出当前模型、运行开关、阻塞和接管阅读顺序，不执行预测。

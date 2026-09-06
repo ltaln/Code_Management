@@ -42,22 +42,18 @@ class GatewayTests(unittest.TestCase):
             self.create('预测 2026-08-11 所有比赛')
         self.assertEqual(err.exception.code,409)
 
-    def test_backtest_is_sequential_and_same_date_resumes(self):
+    def test_every_new_command_creates_a_fresh_task(self):
         first=self.create('回测 2026-08-11 所有比赛','backtest-first')
         with self.store.db() as db:
             db.execute("UPDATE tasks SET status='AWAITING_GPT' WHERE id=?",(first,))
-        resumed=self.create('回测 2026-08-11 所有比赛','backtest-resume')
-        self.assertEqual(resumed,first)
-        with self.assertRaisesRegex(RequestError,'PREVIOUS_BACKTEST_NOT_FINISHED'):
-            self.create('回测 2026-08-12 所有比赛','backtest-next')
+        same_date=self.create('回测 2026-08-11 所有比赛','backtest-again')
+        next_date=self.create('回测 2026-08-12 所有比赛','backtest-next')
+        prediction_again=self.create('预测 2026-08-11 所有比赛','prediction-again')
+        self.assertEqual(len({first,same_date,next_date,prediction_again}),4)
         with self.store.db() as db:
             db.execute("UPDATE tasks SET status='FAILED' WHERE id=?",(first,))
-        retry=self.create('回测 2026-08-11 所有比赛','backtest-retry')
-        self.assertNotEqual(retry,first)
-        with self.store.db() as db:
-            db.execute("UPDATE tasks SET status='FAILED' WHERE id=?",(retry,))
-        with self.assertRaisesRegex(RequestError,'PREVIOUS_BACKTEST_ERROR_UNRESOLVED'):
-            self.create('回测 2026-08-12 所有比赛','backtest-after-error')
+        after_error=self.create('回测 2026-08-13 所有比赛','backtest-after-error')
+        self.assertNotIn(after_error,{first,same_date,next_date,prediction_again})
 
     def test_prediction_collects_fresh_without_t30_date_gate(self):
         task=self.create('预测 2026-08-11 所有比赛')
@@ -274,7 +270,7 @@ class GatewayTests(unittest.TestCase):
         bodies=self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/openapi.json'},
                         lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('200'))
-        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.21')
+        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.22')
         self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/v1/tasks/'+'a'*32},
                  lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('401'))

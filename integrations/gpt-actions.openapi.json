@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "HH520 private prediction gateway",
-    "version": "0.4.20",
-    "description": "Fresh prediction data with bounded two-match analysis pages for large fixture dates. Old collections are reserved for backtests."
+    "version": "0.4.21",
+    "description": "Fresh prediction data with bounded two-match analysis pages. Backtests are sequential and the source website date directory is the highest-priority match-date authority."
   },
   "servers": [
     {

@@ -153,6 +153,15 @@ def compact_match(path: Path, replay: bool = False) -> dict:
         'package_sha256': hashlib.sha256(raw).hexdigest(),
         'compression_policy': 'latest_market_snapshot_only_v2',
         'replay_mode': replay,
+        'date_validation': {
+            'rule_version': 'SOURCE_DIRECTORY_PRIORITY_V1',
+            'priority': 1,
+            'effective_match_date': package['date'],
+            'source_catalog_url': f"https://www.hh520.com/?date={package['date'].replace('-', '')}",
+            'kickoff_calendar_date': (_parse_time(package.get('kickoff_at_raw', '')).date().isoformat()
+                                      if _parse_time(package.get('kickoff_at_raw', '')) else None),
+            'instruction': '源网站该日期目录为最高优先级；目录内次日凌晨开赛仍归属目录日期，不得判定为日期不符。',
+        },
         'result_mask': {'applied': replay, 'masked_values': 0, 'future_sections_omitted': []},
         'sections': [],
     }

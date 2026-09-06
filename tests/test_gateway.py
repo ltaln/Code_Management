@@ -42,6 +42,23 @@ class GatewayTests(unittest.TestCase):
             self.create('预测 2026-08-11 所有比赛')
         self.assertEqual(err.exception.code,409)
 
+    def test_backtest_is_sequential_and_same_date_resumes(self):
+        first=self.create('回测 2026-08-11 所有比赛','backtest-first')
+        with self.store.db() as db:
+            db.execute("UPDATE tasks SET status='AWAITING_GPT' WHERE id=?",(first,))
+        resumed=self.create('回测 2026-08-11 所有比赛','backtest-resume')
+        self.assertEqual(resumed,first)
+        with self.assertRaisesRegex(RequestError,'PREVIOUS_BACKTEST_NOT_FINISHED'):
+            self.create('回测 2026-08-12 所有比赛','backtest-next')
+        with self.store.db() as db:
+            db.execute("UPDATE tasks SET status='FAILED' WHERE id=?",(first,))
+        retry=self.create('回测 2026-08-11 所有比赛','backtest-retry')
+        self.assertNotEqual(retry,first)
+        with self.store.db() as db:
+            db.execute("UPDATE tasks SET status='FAILED' WHERE id=?",(retry,))
+        with self.assertRaisesRegex(RequestError,'PREVIOUS_BACKTEST_ERROR_UNRESOLVED'):
+            self.create('回测 2026-08-12 所有比赛','backtest-after-error')
+
     def test_prediction_collects_fresh_without_t30_date_gate(self):
         task=self.create('预测 2026-08-11 所有比赛')
         reopened=Store(self.path)
@@ -89,6 +106,8 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(status,200)
         status,match=self.app.route('GET',f'/v1/tasks/{task}/matches/1',{})
         self.assertEqual(match['package_sha256'],hashlib.sha256((self.path.parent/'collections'/task/self.store.get(task)['input_ref']['attempt_id']/'data/matches/2099-08-11/snapshot_identity_v1/match_001_20990811001.json').read_bytes()).hexdigest())
+        self.assertEqual(match['date_validation']['effective_match_date'],'2099-08-11')
+        self.assertEqual(match['date_validation']['kickoff_calendar_date'],'2099-08-12')
         status,batch=self.app.route('GET',f'/v1/tasks/{task}/analysis-batch',{})
         self.assertEqual(status,200)
         self.assertEqual(len(batch['matches']),1)
@@ -255,7 +274,7 @@ class GatewayTests(unittest.TestCase):
         bodies=self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/openapi.json'},
                         lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('200'))
-        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.19')
+        self.assertEqual(json.loads(b''.join(bodies))['info']['version'],'0.4.21')
         self.app({'REQUEST_METHOD':'GET','PATH_INFO':'/v1/tasks/'+'a'*32},
                  lambda status,headers:statuses.append(status))
         self.assertTrue(statuses[-1].startswith('401'))

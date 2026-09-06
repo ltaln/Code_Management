@@ -100,6 +100,26 @@ class Store:
                 if existing['payload'] != encoded:
                     raise RequestError(409, 'REQUEST_ID_REUSED_WITH_DIFFERENT_COMMAND')
                 return existing['id'], False
+            if payload.get('mode') == 'backtest':
+                previous = None
+                for row in db.execute('SELECT id,payload,status FROM tasks ORDER BY created DESC'):
+                    try:
+                        if json.loads(row['payload']).get('mode') == 'backtest':
+                            previous = row
+                            break
+                    except (TypeError, ValueError):
+                        continue
+                if previous:
+                    previous_payload = json.loads(previous['payload'])
+                    same_date = previous_payload.get('date') == payload.get('date')
+                    active = {'CREATED', 'STARTUP_CHECK', 'COLLECTING', 'AWAITING_GPT'}
+                    failed = {'FAILED', 'BLOCKED', 'PARTIAL'}
+                    if previous['status'] in active:
+                        if same_date:
+                            return previous['id'], False
+                        raise RequestError(409, f"PREVIOUS_BACKTEST_NOT_FINISHED:{previous['id']}:{previous['status']}")
+                    if previous['status'] in failed and not same_date:
+                        raise RequestError(409, f"PREVIOUS_BACKTEST_ERROR_UNRESOLVED:{previous['id']}:{previous['status']}")
             task_id, now = uuid.uuid4().hex, time.time()
             db.execute('INSERT INTO tasks(id,request_id,payload,status,created,updated,asset_hash) VALUES(?,?,?,?,?,?,?)',
                        (task_id, request_id, encoded, 'CREATED', now, now, asset_hash))
@@ -455,6 +475,9 @@ class Application:
             raise RequestError(400,'MATCH_RESULT_FIELDS_INVALID')
         if body['match_no']!=expected['match_no'] or body['code']!=expected['code']:
             raise RequestError(409,'MATCH_IDENTITY_MISMATCH')
+        serialized=json.dumps(body,ensure_ascii=False)
+        if re.search(r'比赛日期.{0,12}(?:回测日|目标日期).{0,8}(?:不符|不一致)|(?:回测日|目标日期).{0,12}比赛日期.{0,8}(?:不符|不一致)',serialized):
+            raise RequestError(409,'SOURCE_DIRECTORY_DATE_IS_AUTHORITATIVE')
         if not isinstance(body['report_markdown'],str) or not 80<=len(body['report_markdown'])<=120000:
             raise RequestError(400,'REPORT_MARKDOWN_LENGTH_INVALID')
         module_ids=['data_consistency_audit','data_confidence_score','water_market','team_analysis',
@@ -578,7 +601,7 @@ class Application:
     def route(self,method,path,env):
         if method=='GET' and path=='/health':
             readiness=verify(self.root)
-            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.20',
+            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.21',
                        'collection':'configured' if os.environ.get('FIRECRAWL_ENDPOINT') and os.environ.get('FIRECRAWL_API_KEY') else 'not_configured',
                        'delivery':'polling_only_no_chat_push'}
         if method=='POST' and path=='/v1/tasks':
@@ -650,7 +673,8 @@ class Application:
             for item in page['matches']:
                 item['analysis_saved']=item['match_no'] in saved
             page.update(task_id=task_id,status=task['status'],snapshot_id=task['input_ref']['snapshot_id'],
-                        required_module_order=self.MODULE_IDS)
+                        required_module_order=self.MODULE_IDS,
+                        date_rule='源网站日期目录最高优先级；目录内次日凌晨比赛仍归属目录日期，不得据此返回日期不符或PASS。')
             return 200,page
         match_submit=re.fullmatch(r'/v1/tasks/([a-f0-9]{32})/matches/(\d{1,3})/prediction',path)
         if match_submit and method=='POST':

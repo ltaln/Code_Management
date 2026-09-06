@@ -17,11 +17,12 @@ import threading
 import time
 import uuid
 from wsgiref.simple_server import make_server
+from urllib.parse import parse_qs
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 from verify_assets import verify, digest
-from data_engine.gpt_input import compact_match, compact_match_batch
+from data_engine.gpt_input import compact_match, compact_match_batch, compact_match_page
 
 
 class RequestError(Exception):
@@ -564,7 +565,7 @@ class Application:
     def route(self,method,path,env):
         if method=='GET' and path=='/health':
             readiness=verify(self.root)
-            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.19',
+            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.20',
                        'collection':'configured' if os.environ.get('FIRECRAWL_ENDPOINT') and os.environ.get('FIRECRAWL_API_KEY') else 'not_configured',
                        'delivery':'polling_only_no_chat_push'}
         if method=='POST' and path=='/v1/tasks':
@@ -614,6 +615,30 @@ class Application:
                          'soccerstats_htft','odds_abnormal_detection','match_risk_engine','conflict_detection',
                          'cross_model_interaction','calibration'])
             return 200,batch
+        page_input=re.fullmatch(r'/v1/tasks/([a-f0-9]{32})/analysis-page',path)
+        if page_input and method=='GET':
+            task_id=page_input.group(1)
+            task,base,index=self.input_index(task_id)
+            try:
+                cursor=int(parse_qs(env.get('QUERY_STRING','')).get('cursor',['0'])[0])
+            except (TypeError,ValueError):
+                raise RequestError(400,'INVALID_ANALYSIS_CURSOR')
+            paths=[]
+            for item in index.get('matches',[]):
+                package=(base/task['input_ref']['package_dir']/item['file']).resolve()
+                if not package.is_relative_to(base) or not package.is_file():
+                    raise RequestError(500,'MATCH_PACKAGE_MISSING')
+                paths.append(package)
+            try:
+                page=compact_match_page(paths,cursor)
+            except ValueError:
+                raise RequestError(400,'INVALID_ANALYSIS_CURSOR')
+            saved={x['match_no'] for x in self.store.predictions(task_id)}
+            for item in page['matches']:
+                item['analysis_saved']=item['match_no'] in saved
+            page.update(task_id=task_id,status=task['status'],snapshot_id=task['input_ref']['snapshot_id'],
+                        required_module_order=self.MODULE_IDS)
+            return 200,page
         match_submit=re.fullmatch(r'/v1/tasks/([a-f0-9]{32})/matches/(\d{1,3})/prediction',path)
         if match_submit and method=='POST':
             task_id,number=match_submit.groups()

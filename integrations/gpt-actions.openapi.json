@@ -2,8 +2,8 @@
   "openapi": "3.1.0",
   "info": {
     "title": "HH520 private prediction gateway",
-    "version": "0.4.19",
-    "description": "Collects fresh data for every prediction, exposes only that task's newest collection, and stores immutable HH520 prediction commits. Old collections are reserved for backtests."
+    "version": "0.4.20",
+    "description": "Fresh prediction data with bounded two-match analysis pages for large fixture dates. Old collections are reserved for backtests."
   },
   "servers": [
     {
@@ -1074,6 +1074,45 @@
           },
           "202": {
             "description": "Chunk saved; immediately submit the next remaining chunk",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenericResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/v1/tasks/{task_id}/analysis-page": {
+      "get": {
+        "operationId": "getHH520AnalysisPage",
+        "summary": "Read at most two bounded matches. Start cursor=0, analyze and save them, then immediately call again with next_cursor until has_more=false.",
+        "parameters": [
+          {
+            "name": "task_id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[a-f0-9]{32}$"
+            }
+          },
+          {
+            "name": "cursor",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "integer",
+              "minimum": 0
+            },
+            "description": "Use 0 first, then exactly the returned next_cursor."
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Bounded analysis page",
             "content": {
               "application/json": {
                 "schema": {

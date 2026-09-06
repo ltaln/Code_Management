@@ -8,13 +8,13 @@ import re
 
 
 MAX_SECTION_CHARS = {
-    'mixed_data': 8_000,
-    'asian_handicap_changes': 18_000,
-    'score_odds_changes': 8_000,
-    'predicted_lineup': 14_000,
-    'historical_lineup_ratings': 8_000,
-    'match_list': 7_000,
-    'internal_model_analysis': 10_000,
+    'mixed_data': 1_200,
+    'asian_handicap_changes': 1_800,
+    'score_odds_changes': 1_000,
+    'predicted_lineup': 1_600,
+    'historical_lineup_ratings': 900,
+    'match_list': 900,
+    'internal_model_analysis': 1_400,
 }
 OMIT_SHARED = {'daily_asian_handicap_summary'}
 
@@ -121,3 +121,15 @@ def compact_match_batch(paths: list[Path]) -> dict:
                                'content':content,'compressed':truncated})
     return {'compression_policy':'latest_market_snapshot_per_match_6000_shared_once_v2','matches':matches,
             'shared_context':shared}
+
+
+def compact_match_page(paths: list[Path], cursor: int, page_size: int = 2) -> dict:
+    """Return at most two bounded matches so large fixture dates stay under Actions limits."""
+    total=len(paths)
+    if cursor < 0 or cursor >= total:
+        raise ValueError('INVALID_ANALYSIS_CURSOR')
+    end=min(cursor+page_size,total)
+    return {'compression_policy':'two_match_pages_latest_snapshot_v1',
+            'cursor':cursor,'next_cursor':end if end<total else None,
+            'has_more':end<total,'total_matches':total,
+            'matches':[compact_match(path) for path in paths[cursor:end]]}

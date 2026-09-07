@@ -143,6 +143,13 @@ class GatewayTests(unittest.TestCase):
         expanded=self.app.expand_min_result(minimal['p'][0],{'match_no':1,'code':'20990811001'})
         self.assertEqual(len(expanded['modules']),13)
         self.assertEqual(expanded['results']['confidence'],'低')
+        scoped=dict(minimal['p'][0])
+        scoped['m']='D'+'C'*12
+        scoped['e']=['data_consistency_audit::unavailable','data_confidence_score::source-a']
+        audited=self.app.expand_min_result(scoped,{'match_no':1,'code':'20990811001'})
+        self.assertEqual(audited['modules'][0]['evidence_refs'],['unavailable'])
+        self.assertEqual(audited['modules'][1]['evidence_refs'],['source-a'])
+        self.assertIn('证据不足',audited['modules'][0]['summary'])
 
     def test_probe_is_not_prediction(self):
         task=self.create()

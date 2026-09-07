@@ -580,14 +580,25 @@ class Application:
             raise RequestError(400,'MIN_MODULE_CODES_INVALID')
         if not isinstance(values,list) or len(values)!=7 or not all(isinstance(x,str) and x.strip() for x in values):
             raise RequestError(400,'MIN_RESULTS_INVALID')
+        scoped={module_id:[] for module_id in cls.MODULE_IDS}
+        for ref in body['e']:
+            if isinstance(ref,str) and '::' in ref:
+                module_id,value=ref.split('::',1)
+                if module_id in scoped and value:
+                    scoped[module_id].append(value)
         trace='|'.join(
-            f"{'COMPLETED' if code=='C' else 'DEGRADED'}:{module_id}已按冻结规则执行"
-            for code,module_id in zip(module_codes,cls.MODULE_IDS))
-        return cls.expand_compact_result({
+            f"{'COMPLETED' if code=='C' else 'DEGRADED'}:"
+            f"{'证据已记录并完成冻结分析' if code=='C' else '证据不足或冲突，结论已降级'}"
+            for code in module_codes)
+        expanded=cls.expand_compact_result({
             'match_no':body['n'],'code':body['c'],'module_trace':trace,'evidence_refs':body['e'],
             'results':dict(zip(('correct_score_top3','htft_top3','asian_handicap','over_under',
                                 'one_x_two','total_goals','confidence'),values)),
             'warnings':body['w'],'prediction_reason':body['p']},expected)
+        if any(scoped.values()):
+            for module in expanded['modules']:
+                module['evidence_refs']=scoped[module['module_id']] or ['unavailable']
+        return expanded
 
     def finalize_prediction(self, task_id):
         task,_,index=self.input_index(task_id)
@@ -634,7 +645,7 @@ class Application:
     def route(self,method,path,env):
         if method=='GET' and path=='/health':
             readiness=verify(self.root)
-            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.22',
+            return 200,{'gateway':'ready','prediction':'external_gpt_handoff' if readiness['runtime_ready'] else 'blocked','release':'0.4.23',
                        'collection':'configured' if os.environ.get('FIRECRAWL_ENDPOINT') and os.environ.get('FIRECRAWL_API_KEY') else 'not_configured',
                        'delivery':'polling_only_no_chat_push','prompt_binding':self.prompt_binding()}
         if method=='POST' and path=='/v1/tasks':

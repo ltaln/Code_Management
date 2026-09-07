@@ -62,7 +62,8 @@ class FirecrawlCollector:
                 raise CollectionError('INVALID_COLLECTION_ID')
         work = self.storage/task_id/attempt_id
         work.mkdir(parents=True, exist_ok=False)
-        env = {k:v for k,v in os.environ.items() if k in ('PATH','SYSTEMROOT','HOME','LANG','TZ')}
+        env = {k:v for k,v in os.environ.items()
+               if k in ('PATH','SYSTEMROOT','HOME','LANG','TZ','HH520_COLLECT_CONCURRENCY')}
         env.update(FIRECRAWL_ENDPOINT=endpoint, FIRECRAWL_API_KEY=key,
                    PYTHONIOENCODING='utf-8', PYTHONUNBUFFERED='1')
         max_pages = min(max(int(os.environ.get('HH520_MAX_PAGES','150')),1),500)

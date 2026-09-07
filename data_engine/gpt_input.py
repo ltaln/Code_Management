@@ -3,7 +3,7 @@ from __future__ import annotations
 
 import hashlib
 import json
-from datetime import datetime
+from datetime import date, datetime
 from pathlib import Path
 import re
 
@@ -19,6 +19,7 @@ MAX_SECTION_CHARS = {
 }
 OMIT_SHARED = {'daily_asian_handicap_summary'}
 REPLAY_OMIT = {'internal_model_analysis'}
+DATE_TOKEN = re.compile(r'(20\d{2})\s*[-/年]\s*(\d{1,2})\s*[-/月]\s*(\d{1,2})\s*日?')
 
 
 def _clean(text: str) -> str:
@@ -137,6 +138,28 @@ def _mask_replay_result(text: str, category: str, target_date: str, kickoff: str
     return _clean('\n'.join(output)), masked
 
 
+def _omit_future_dated_lines(text: str, target_date: str) -> tuple[str, int]:
+    """Remove evidence rows explicitly dated after the replay catalogue date."""
+    cutoff = date.fromisoformat(target_date)
+    output = []
+    omitted = 0
+    for line in text.splitlines():
+        future = False
+        for year, month, day in DATE_TOKEN.findall(line):
+            try:
+                observed = date(int(year), int(month), int(day))
+            except ValueError:
+                continue
+            if observed > cutoff:
+                future = True
+                break
+        if future:
+            omitted += 1
+        else:
+            output.append(line)
+    return _clean('\n'.join(output)), omitted
+
+
 def compact_match(path: Path, replay: bool = False) -> dict:
     raw = path.read_bytes()
     package = json.loads(raw)
@@ -162,7 +185,12 @@ def compact_match(path: Path, replay: bool = False) -> dict:
                                       if _parse_time(package.get('kickoff_at_raw', '')) else None),
             'instruction': '源网站该日期目录为最高优先级；目录内次日凌晨开赛仍归属目录日期，不得判定为日期不符。',
         },
-        'result_mask': {'applied': replay, 'masked_values': 0, 'future_sections_omitted': []},
+        'result_mask': {
+            'applied': replay,
+            'masked_values': 0,
+            'future_sections_omitted': [],
+            'future_lines_omitted': 0,
+        },
         'sections': [],
     }
     entries = list(package.get('sections', [])) + list(package.get('shared_context', []))
@@ -174,6 +202,9 @@ def compact_match(path: Path, replay: bool = False) -> dict:
             output['result_mask']['future_sections_omitted'].append(category)
             continue
         text = entry.get('markdown', '')
+        if replay:
+            text, omitted = _omit_future_dated_lines(text, package['date'])
+            output['result_mask']['future_lines_omitted'] += omitted
         if replay and category == 'asian_handicap_changes':
             content, truncated = _replay_market_snapshot(text, MAX_SECTION_CHARS[category], package.get('kickoff_at_raw', ''))
         elif replay and category == 'score_odds_changes':
@@ -210,7 +241,10 @@ def compact_match_batch(paths: list[Path], replay: bool = False) -> dict:
                 if category in OMIT_SHARED or category not in MAX_SECTION_CHARS or category in shared_seen or (replay and category in REPLAY_OMIT):
                     continue
                 shared_seen.add(category)
-                content,truncated=_bounded(entry.get('markdown',''),MAX_SECTION_CHARS[category])
+                shared_text=entry.get('markdown','')
+                if replay:
+                    shared_text,_=_omit_future_dated_lines(shared_text,package['date'])
+                content,truncated=_bounded(shared_text,MAX_SECTION_CHARS[category])
                 if replay:
                     content,_=_mask_replay_result(content,category,package['date'],package.get('kickoff_at_raw',''))
                 shared.append({'category':category,'source_url':entry.get('url'),

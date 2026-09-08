@@ -3,6 +3,7 @@ from concurrent.futures import ThreadPoolExecutor
 import json
 import os
 import re
+import threading
 import time
 from collections import deque
 from datetime import datetime, timezone
@@ -14,6 +15,7 @@ from urllib.parse import parse_qs, urljoin, urlparse, urlunparse
 import requests
 
 FIRECRAWL_ENDPOINT = os.environ.get("FIRECRAWL_ENDPOINT") or "https://api.firecrawl.dev/v2/scrape"
+FIRECRAWL_FALLBACK_SLOTS = threading.BoundedSemaphore(3)
 BASE_URL = "https://www.hh520.com/"
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36"
 
@@ -66,7 +68,7 @@ def scrape_url(url, api_key, retries=6, min_interval=3.0):
     raise RuntimeError(f"Firecrawl exhausted retries for {url}: {last_error or 'HTTP 429'}")
 
 def fetch_source(url):
-    r=requests.get(url,headers={"User-Agent":UA,"Accept-Language":"zh-CN,zh;q=0.9"},timeout=60); r.raise_for_status()
+    r=requests.get(url,headers={"User-Agent":UA,"Accept-Language":"zh-CN,zh;q=0.9"},timeout=15); r.raise_for_status()
     if not r.encoding or r.encoding.lower()=="iso-8859-1": r.encoding=r.apparent_encoding or "utf-8"
     return {"status_code":r.status_code,"final_url":r.url,"fetched_at":datetime.now(timezone.utc).isoformat(),"html":r.text}
 
@@ -140,7 +142,8 @@ def collect_page(item, api_key, skip_source_validation):
         }}
         return item,source,response,None
     print(f"Firecrawl scrape [{cat}]: {url}")
-    try: response=scrape_url(url,api_key)
+    try:
+        with FIRECRAWL_FALLBACK_SLOTS: response=scrape_url(url,api_key)
     except Exception as e: return item,source,None,e
     return item,source,response,None
 
@@ -152,7 +155,7 @@ def main():
     queue=deque(); queued=set()
     for u in load_seed_urls(a.urls,a.date): queue.append((u,classify_supported_url(u,a.date) or "seed","seed")); queued.add(u)
     docs=[]; vals=[]; discoveries=[]; processed=set(); failures=[]
-    concurrency=min(max(int(os.environ.get("HH520_COLLECT_CONCURRENCY","1")),1),4)
+    concurrency=min(max(int(os.environ.get("HH520_COLLECT_CONCURRENCY","1")),1),8)
     with ThreadPoolExecutor(max_workers=concurrency) as executor:
         while queue and len(processed)<a.max_pages:
             batch=[]

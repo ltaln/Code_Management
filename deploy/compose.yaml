@@ -14,8 +14,6 @@ services:
       - hh520_state:/state
     restart: unless-stopped
     mem_limit: 192m
-    deploy:
-      replicas: 3
     networks:
       - default
       - firecrawl_backend
@@ -35,6 +33,8 @@ services:
       - hh520_state:/state
     restart: unless-stopped
     mem_limit: 192m
+    deploy:
+      replicas: 3
 volumes:
   hh520_state:
 

@@ -1,5 +1,9 @@
 # Changelog
 
+## Range replay worker alignment — 2026-09-09
+
+- 将重放采集进程固定为 3 个，与 Firecrawl 的 3 个队列执行槽匹配；避免 6 个日期进程争抢导致首个日期超过 ChatGPT 单次执行窗口。
+
 ## Range replay collection resilience — 2026-09-08
 
 - Reduced per-worker Firecrawl concurrency to prevent six-date runs from overwhelming the local scrape queue.

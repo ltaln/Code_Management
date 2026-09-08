@@ -14,7 +14,7 @@
 - `采集 YYYY-MM-DD 所有比赛`
 - `预测 YYYY-MM-DD 所有比赛`
 - `回测 YYYY-MM-DD 所有比赛`
-- `回测 YYYY-MM-DD至YYYY-MM-DD`（最多 7 天）
+- `回测 YYYY-MM-DD至YYYY-MM-DD`（最多 3 天）
 
 每条新命令都必须重新采集并完整执行，不能读取旧任务快照、旧 Prediction Commit 或旧报告代替本次运行。同一网络请求重试必须复用 request_id；下一条用户命令必须生成新的 request_id。
 

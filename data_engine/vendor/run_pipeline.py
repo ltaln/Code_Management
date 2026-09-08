@@ -127,6 +127,18 @@ def collect_page(item, api_key, skip_source_validation):
     if not skip_source_validation:
         try: source=fetch_source(url)
         except Exception as e: source={"error":str(e)}
+    # HH520 pages are server-rendered. The fresh source fetch already contains
+    # the complete evidence used downstream, so normalize it into the existing
+    # Firecrawl response contract and reserve Firecrawl for source-fetch failure.
+    # This preserves discovery, archives, masking and all model inputs while
+    # removing a redundant second render from every successful page.
+    if source and source.get("html"):
+        html=source["html"]
+        response={"success":True,"data":{
+            "markdown":visible_text(html),"html":html,"rawHtml":html,
+            "metadata":{"sourceURL":url,"statusCode":source.get("status_code"),"collectionMode":"fresh-source"},
+        }}
+        return item,source,response,None
     print(f"Firecrawl scrape [{cat}]: {url}")
     try: response=scrape_url(url,api_key)
     except Exception as e: return item,source,None,e

@@ -1,5 +1,11 @@
 # Changelog
 
+## Range replay collection resilience — 2026-09-08
+
+- Reduced per-worker Firecrawl concurrency to prevent six-date runs from overwhelming the local scrape queue.
+- Missing optional evidence pages now degrade only their affected modules to `D`; a verified dated match roster and complete match identities can continue to prediction.
+- Roster failure and truncated discovery remain blocking, preserving historical replay completeness and audit safety.
+
 ## Runtime capacity adjustment · 2026-09-07
 
 - 将新鲜采集单批并发安全上限从 16 页提高到 32 页，减少多轮 Firecrawl 排队；采集网址、内容、重试、身份绑定、脱敏、任务逻辑、模型与版本均不变。

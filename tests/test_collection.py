@@ -8,7 +8,7 @@ from unittest.mock import patch
 ROOT=Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT))
 from task_manager.service import Store, Worker, parse_command, digest
-from data_engine.collector import CollectionError, FirecrawlCollector, supervise, check_vendor
+from data_engine.collector import CollectionError, FirecrawlCollector, blocking_failures, supervise, check_vendor
 
 
 class CollectorTests(unittest.TestCase):
@@ -60,6 +60,13 @@ class CollectorTests(unittest.TestCase):
 
     def test_vendor_integrity(self):
         check_vendor()
+
+    def test_optional_evidence_failure_does_not_block_prediction(self):
+        discovery = {'failures': [
+            {'category': 'asian_handicap_changes', 'url': 'https://example.test/optional'},
+            {'category': 'match_list', 'url': 'https://example.test/roster'},
+        ]}
+        self.assertEqual(blocking_failures(discovery), [discovery['failures'][1]])
 
 
 if __name__=='__main__': unittest.main()

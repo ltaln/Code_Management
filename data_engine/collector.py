@@ -15,6 +15,16 @@ class CollectionError(Exception):
     pass
 
 
+def blocking_failures(discovery):
+    """Only roster failures can make a dated collection prediction-ineligible.
+
+    Missing match-level evidence remains auditable and is handled by the frozen
+    model as a degraded (D) module instead of blocking the whole date range.
+    """
+    return [item for item in discovery.get('failures', [])
+            if item.get('category') == 'match_list']
+
+
 def check_vendor():
     lock = json.loads((VENDOR / 'source.json').read_text(encoding='utf-8'))
     for name, expected in lock['files'].items():
@@ -83,15 +93,18 @@ class FirecrawlCollector:
         # Extra xi pages may be discovered from the undated home-page seed.
         # Once the dated authoritative roster excludes them explicitly, they are
         # retained for audit but do not make the requested-date package partial.
+        required_failures = blocking_failures(discovery)
         complete = (index['match_count'] > 0 and index['complete_matches'] == index['match_count']
-                    and not discovery['truncated'] and not discovery['failed_pages'])
+                    and not discovery['truncated'] and not required_failures)
         result = {'task_id':task_id,'attempt_id':attempt_id,'date':target_date,
                   'collected_at':datetime.now(timezone.utc).isoformat(),
                   'snapshot_id':manifest['snapshot_id'],'collector':'Firecrawl',
                   'package_version':'identity-v2','match_count':index['match_count'],
                   'complete_matches':index['complete_matches'],
                   'scraped_pages':manifest['scraped_pages'],
-                  'failed_pages':discovery['failed_pages'],'truncated':discovery['truncated'],
+                  'failed_pages':discovery['failed_pages'],
+                  'blocking_failed_pages':len(required_failures),
+                  'truncated':discovery['truncated'],
                   'unassigned_count':len(index.get('unassigned_discoveries',[])),
                   'collection_complete':complete,'is_prediction':False,
                   'prediction_eligible':complete,
@@ -114,6 +127,8 @@ def collection_report(result):
     state='采集完成' if result['collection_complete'] else '采集完成，但数据存在缺项'
     return (f"# {state}\n\n日期：{result['date']}\n\n"
             f"成功采集 {result['scraped_pages']} 页；失败 {result['failed_pages']} 页。\n\n"
+            f"阻断性失败 {result.get('blocking_failed_pages', result['failed_pages'])} 页；"
+            "非阻断证据缺失由对应模块降级为 D。\n\n"
             f"识别 {result['match_count']} 场；资料齐全且身份核对通过 {result['complete_matches']} 场。\n\n"
             f"达到页数上限：{'是' if result['truncated'] else '否'}；未归属资料：{result['unassigned_count']}。\n\n"
             f"快照：{result['snapshot_id']}\n\n归档校验：{result['receipt_sha256']}\n\n"

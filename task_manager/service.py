@@ -823,8 +823,8 @@ class Application:
             supplied={x.get('n'):x for x in body['p'] if isinstance(x,dict)}
             saved={x['match_no'] for x in self.store.predictions(task_id)}
             remaining=set(expected_by_number)-saved
-            if len(supplied)!=len(body['p']) or not set(supplied) or not set(supplied)<=remaining:
-                raise RequestError(400,'MIN_BATCH_MUST_CONTAIN_UNSAVED_MATCHES_ONCE')
+            if len(supplied)!=len(body['p']) or not set(supplied) or not set(supplied)<=set(expected_by_number):
+                raise RequestError(400,'MIN_BATCH_MUST_CONTAIN_KNOWN_MATCHES_ONCE')
             expanded=[self.expand_min_result(supplied[number],expected_by_number[number]) for number in sorted(supplied)]
             hashes=[]
             for result in expanded:

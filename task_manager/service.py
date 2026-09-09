@@ -452,7 +452,7 @@ class Application:
             raise RequestError(400,'JSON_OBJECT_REQUIRED')
         return value
 
-    def task_progress(self, task_id, wait_seconds=8):
+    def task_progress(self, task_id, wait_seconds=1):
         """Short-poll transient states within the ChatGPT Actions request timeout."""
         deadline=time.monotonic()+wait_seconds
         task=self.store.get(task_id)

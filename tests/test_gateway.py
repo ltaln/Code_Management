@@ -227,6 +227,9 @@ class GatewayTests(unittest.TestCase):
         self.assertEqual(status,202)
         self.assertEqual(retry['remaining_match_nos'],[2])
         self.assertFalse(retry['saved_matches'][0]['created'])
+        progress=self.app.task_progress(task,wait_seconds=0)
+        self.assertEqual(progress['saved_match_nos'],[1])
+        self.assertEqual(progress['remaining_match_nos'],[2])
         status,final=submit(2)
         self.assertEqual(status,200)
         self.assertTrue(final['is_prediction'])
@@ -253,6 +256,8 @@ class GatewayTests(unittest.TestCase):
             db.execute("UPDATE tasks SET status='AWAITING_GPT' WHERE id=?",(task,))
         progress=self.app.task_progress(task,wait_seconds=0)
         self.assertEqual(progress['prompt_bundle']['prompt_id'],self.app.execution_prompt['prompt_id'])
+        self.assertEqual(progress['saved_match_nos'],[])
+        self.assertEqual(progress['remaining_match_nos'],[])
         self.assertIn('Apply prompt_bundle.execution_prompt',progress['instruction'])
 
     def test_expired_lease_fences_stale_worker(self):

@@ -466,6 +466,15 @@ class Application:
         task['instruction']=('Do not reply to the user yet. Call getHH520Task again with this task_id.'
                              if transient else 'Continue with next_operation in this same turn.')
         if task['status']=='AWAITING_GPT':
+            try:
+                _,_,index=self.input_index(task_id)
+                saved={item['match_no'] for item in self.store.predictions(task_id)}
+                expected=[item['match_no'] for item in index.get('matches',[])]
+            except RequestError:
+                saved=set()
+                expected=[]
+            task['saved_match_nos']=[number for number in expected if number in saved]
+            task['remaining_match_nos']=[number for number in expected if number not in saved]
             task['prompt_bundle']=self.execution_prompt
             task['instruction']=(
                 'Apply prompt_bundle.execution_prompt now. Then call next_operation and complete every match '
